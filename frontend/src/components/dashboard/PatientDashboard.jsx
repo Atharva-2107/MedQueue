@@ -5,6 +5,7 @@ import { supabase } from "../../supabaseClient";
 import { useGeolocation } from "../../hooks/useGeolocation";
 import { useRealtime } from "../../hooks/useRealtime";
 import { useNearbyHospitals, ensureHospitalInDB } from "../../hooks/useNearbyHospitals";
+import PatientOnboarding from "../onboarding/PatientOnboarding";
 import {
   StatCard, StatusBadge, SectionTitle, EmptyState, LoadingSpinner,
   Card, DashboardHeader, InfoRow, AlertBox,
@@ -498,21 +499,94 @@ export default function PatientDashboard({ section }) {
   );
 
   /* ════ MY HEALTH ════ */
-  if (section === "health") return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      <DashboardHeader title="🩺 My Health Profile" />
-      {!profile ? <AlertBox type="info">No profile found. Complete your onboarding.</AlertBox> : (
-        <>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 16 }}>
-            {[["Blood Group", profile.blood_group || "—", "🩸", "red"], ["Gender", profile.gender || "—", "👤", "blue"], ["Date of Birth", profile.date_of_birth ? new Date(profile.date_of_birth).toLocaleDateString("en-IN") : "—", "📅", "violet"], ["City", profile.city || "—", "📍", "cyan"]].map(([k, v, i, c]) => <StatCard key={k} icon={i} label={k} value={v} color={c} />)}
-          </div>
-          {profile.allergies?.length > 0 && <Card><p style={{ fontSize: 12, fontWeight: 800, color: "#ea580c", textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>⚠️ Allergies</p><div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>{profile.allergies.map(a => <span key={a} style={{ padding: "4px 14px", borderRadius: 20, fontSize: 12, fontWeight: 700, background: "#fff7ed", color: "#c2410c", border: "1px solid #fed7aa" }}>{a}</span>)}</div></Card>}
-          {profile.emergency_contact_name && <Card style={{ borderColor: "#fecaca" }}><p style={{ fontSize: 12, fontWeight: 800, color: "#dc2626", textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>🆘 Emergency Contact</p><InfoRow label="Name" value={profile.emergency_contact_name} icon="👤" /><InfoRow label="Phone" value={profile.emergency_contact_phone} icon="📞" /><InfoRow label="Relation" value={profile.emergency_contact_relation} icon="🤝" /></Card>}
-          {profile.medical_notes && <Card><p style={{ fontSize: 12, fontWeight: 800, color: "#64748b", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>📝 Notes</p><p style={{ fontSize: 13, color: "#475569", lineHeight: 1.6, margin: 0 }}>{profile.medical_notes}</p></Card>}
-        </>
-      )}
-    </div>
-  );
+  if (section === "health") {
+    const [editMode, setEditMode] = React.useState(false);
+
+    // Show inline onboarding if no profile OR user clicked Edit
+    if (!profile || editMode) {
+      return (
+        <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+          {editMode && (
+            <button onClick={() => setEditMode(false)} style={{ alignSelf: "flex-start", marginBottom: 16, padding: "8px 18px", borderRadius: 12, border: "1px solid #e2e8f0", background: "#f8fafc", color: "#64748b", fontWeight: 700, cursor: "pointer", fontSize: 13 }}>
+              ← Back to Profile
+            </button>
+          )}
+          <PatientOnboarding
+            onComplete={() => { setEditMode(false); load(); }}
+            onSkip={() => setEditMode(false)}
+          />
+        </div>
+      );
+    }
+
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <DashboardHeader title="🩺 My Health Profile" subtitle="Your medical info on file" />
+          <button onClick={() => setEditMode(true)} style={{ padding: "10px 20px", borderRadius: 12, border: "1px solid #e2e8f0", background: "#fff", color: "#3b82f6", fontWeight: 800, fontSize: 13, cursor: "pointer" }}>✏️ Edit Profile</button>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 14 }}>
+          {[["Blood Group", profile.blood_group || "—", "🩸", "red"], ["Gender", profile.gender ? profile.gender[0].toUpperCase() + profile.gender.slice(1) : "—", "👤", "blue"], ["Date of Birth", profile.date_of_birth ? new Date(profile.date_of_birth).toLocaleDateString("en-IN") : "—", "📅", "violet"], ["City", profile.city || "—", "📍", "cyan"]].map(([k, v, i, c]) => <StatCard key={k} icon={i} label={k} value={v} color={c} />)}
+        </div>
+
+        {/* Completeness hint */}
+        {(!profile.gender || !profile.blood_group || !profile.emergency_contact_name) && (
+          <AlertBox type="warning">
+            Your profile is incomplete. <button onClick={() => setEditMode(true)} style={{ background: "none", border: "none", color: "#d97706", fontWeight: 800, cursor: "pointer", textDecoration: "underline", padding: 0 }}>Fill missing fields →</button>
+          </AlertBox>
+        )}
+
+        {profile.allergies?.length > 0 && (
+          <Card>
+            <p style={{ fontSize: 12, fontWeight: 800, color: "#ea580c", textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>⚠️ Allergies</p>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {profile.allergies.map(a => <span key={a} style={{ padding: "4px 14px", borderRadius: 20, fontSize: 12, fontWeight: 700, background: "#fff7ed", color: "#c2410c", border: "1px solid #fed7aa" }}>{a}</span>)}
+            </div>
+          </Card>
+        )}
+
+        {profile.chronic_diseases?.length > 0 && (
+          <Card>
+            <p style={{ fontSize: 12, fontWeight: 800, color: "#7c3aed", textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>🏥 Chronic Conditions</p>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {profile.chronic_diseases.map(d => <span key={d} style={{ padding: "4px 14px", borderRadius: 20, fontSize: 12, fontWeight: 700, background: "#f5f3ff", color: "#6d28d9", border: "1px solid #ddd6fe" }}>{d}</span>)}
+            </div>
+          </Card>
+        )}
+
+        {profile.emergency_contact_name ? (
+          <Card style={{ borderColor: "#fecaca" }}>
+            <p style={{ fontSize: 12, fontWeight: 800, color: "#dc2626", textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>🆘 Emergency Contact</p>
+            <InfoRow label="Name" value={profile.emergency_contact_name} icon="👤" />
+            <InfoRow label="Phone" value={profile.emergency_contact_phone} icon="📞" />
+            <InfoRow label="Relation" value={profile.emergency_contact_relation} icon="🤝" />
+          </Card>
+        ) : (
+          <Card style={{ borderColor: "#fde68a", background: "#fffbeb" }}>
+            <p style={{ fontSize: 13, fontWeight: 800, color: "#92400e", margin: "0 0 8px" }}>🆘 No Emergency Contact — Add One</p>
+            <p style={{ fontSize: 12, color: "#78716c", margin: "0 0 12px" }}>Critical for emergencies when you can't communicate.</p>
+            <button onClick={() => setEditMode(true)} style={{ padding: "8px 18px", borderRadius: 10, border: "none", background: "#f59e0b", color: "#fff", fontWeight: 800, cursor: "pointer", fontSize: 12 }}>Add Now →</button>
+          </Card>
+        )}
+
+        {(profile.aadhar_number || profile.insurance_id) && (
+          <Card>
+            <p style={{ fontSize: 12, fontWeight: 800, color: "#64748b", textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>📋 Documents</p>
+            {profile.aadhar_number && <InfoRow label="Aadhar" value={`XXXX XXXX ${profile.aadhar_number.slice(-4)}`} icon="🪪" />}
+            {profile.insurance_id && <InfoRow label="Insurance" value={profile.insurance_id} icon="🏷️" />}
+          </Card>
+        )}
+
+        {profile.medical_notes && (
+          <Card>
+            <p style={{ fontSize: 12, fontWeight: 800, color: "#64748b", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>📝 Medical Notes</p>
+            <p style={{ fontSize: 13, color: "#475569", lineHeight: 1.6, margin: 0 }}>{profile.medical_notes}</p>
+          </Card>
+        )}
+      </div>
+    );
+  }
 
   /* ════ BOOK A BED ════ */
   if (section === "book") return (
