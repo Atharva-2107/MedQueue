@@ -1,0 +1,20 @@
+{
+  "name": "medqueue",
+  "version": "1.0.0",
+  "description": "Runtime Terrors - Hospital Bed & Ambulance Tracker\r Project Morpheus Hackathon 2026. A real-time availability tracker and emergency dispatch system built with Node.js, Supabase (PostGIS), and React/React Native.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Atharva-2107/MedQueue.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Atharva-2107/MedQueue/issues"
+  },
+  "homepage": "https://github.com/Atharva-2107/MedQueue#readme"
+}
