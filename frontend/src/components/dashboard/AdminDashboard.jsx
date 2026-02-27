@@ -1,213 +1,231 @@
-// src/components/dashboard/AdminDashboard.jsx
-import React from "react";
-import { useDashboard } from "../../hooks/useDashboard";
+// src/components/dashboard/AdminDashboard.jsx — Light mode, Supabase-direct
+import React, { useState, useEffect } from "react";
+import { supabase } from "../../supabaseClient";
 import {
-  StatCard, StatusBadge, SectionTitle, EmptyState, LoadingSpinner,
-  Card, BedBar, ProgressRing, DashboardHeader, InfoRow,
+  StatCard, SectionTitle, EmptyState, LoadingSpinner,
+  Card, BedBar, ProgressRing, DashboardHeader, StatusBadge, InfoRow,
 } from "../shared/UIComponents";
 
 export default function AdminDashboard({ section }) {
-  const { data, loading, error } = useDashboard("admin");
+  const [hospitals, setHospitals] = useState([]);
+  const [ambulances, setAmbulances] = useState([]);
+  const [bookings, setBookings] = useState([]);
+  const [dispatches, setDispatches] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      const [h, a, b, d, u] = await Promise.all([
+        supabase.from("hospitals").select("*").eq("is_active", true).order("name"),
+        supabase.from("ambulances").select("*").order("vehicle_number"),
+        supabase.from("bookings").select("*, hospitals(name), beds(bed_number, bed_type)").order("booked_at", { ascending: false }).limit(20),
+        supabase.from("dispatches").select("*, ambulances(vehicle_number), hospitals(name)").order("requested_at", { ascending: false }).limit(20),
+        supabase.from("users").select("id, full_name, role, is_active").order("created_at", { ascending: false }),
+      ]);
+      setHospitals(h.data || []);
+      setAmbulances(a.data || []);
+      setBookings(b.data || []);
+      setDispatches(d.data || []);
+      setUsers(u.data || []);
+      setLoading(false);
+    };
+    load();
+  }, []);
 
   if (loading) return <LoadingSpinner />;
-  if (error) return <div className="p-8 text-red-400 font-semibold">⚠️ Error: {error}</div>;
-  if (!data) return null;
 
-  const {
-    system_totals: t, ambulance_summary: a, total_patients,
-    pending_bookings, active_dispatches, hospitals,
-    recent_bookings, recent_dispatches,
-  } = data;
+  const totalBeds = hospitals.reduce((s, h) => s + (h.total_beds || 0), 0);
+  const availBeds = hospitals.reduce((s, h) => s + (h.available_beds || 0), 0);
+  const ambAvail = ambulances.filter(a => a.status === "available").length;
+  const ambDispatched = ambulances.filter(a => a.status === "dispatched").length;
+  const totalPatients = users.filter(u => u.role === "patient").length;
+  const pendingBk = bookings.filter(b => b.status === "pending").length;
+  const activeDisp = dispatches.filter(d => ["pending", "accepted", "en_route", "arrived"].includes(d.status)).length;
 
-  /* ── HOME ── */
-  if (section === "home" || !section) {
-    const bedPct = t.total_beds ? Math.round(((t.total_beds - t.available_beds) / t.total_beds) * 100) : 0;
-    const icuPct = t.total_icu ? Math.round(((t.total_icu - t.available_icu) / t.total_icu) * 100) : 0;
-    const fleetPct = a.total ? Math.round((a.dispatched / a.total) * 100) : 0;
+  /* ════════ HOME ════════ */
+  if (section === "home" || !section) return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <DashboardHeader title="System Overview" subtitle="MedQueue — City-Wide Admin Dashboard" badge="ADMIN" badgeColor="violet" />
 
-    return (
-      <div className="space-y-6">
-        {/* Header */}
-        <DashboardHeader
-          title="System Overview"
-          subtitle="MedQueue — Pune City-Wide Dashboard"
-          badge="ADMIN"
-          badgeColor="violet"
-        />
-
-        {/* Occupancy Rings */}
-        <Card>
-          <p className="text-white/40 text-xs font-semibold uppercase tracking-widest mb-5">City-Wide Capacity</p>
-          <div className="flex justify-around flex-wrap gap-6">
-            <ProgressRing label="Bed Occupancy" value={t.total_beds - t.available_beds} max={t.total_beds} icon="🛏️" color="emerald" />
-            <ProgressRing label="ICU Occupancy" value={t.total_icu - t.available_icu} max={t.total_icu} icon="❤️‍🔥" color="red" />
-            <ProgressRing label="Fleet Active" value={a.dispatched} max={a.total} icon="🚑" color="amber" />
-          </div>
-        </Card>
-
-        {/* Key Metrics */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard icon="🛏️" label="Available Beds" value={t.available_beds} sub={`of ${t.total_beds} total`} color="emerald" />
-          <StatCard icon="❤️‍🔥" label="ICU Available" value={t.available_icu} sub={`of ${t.total_icu} ICU total`} color="red" />
-          <StatCard icon="🚑" label="Ambulances Free" value={a.available} sub={`${a.dispatched} dispatched`} color="amber" />
-          <StatCard icon="👥" label="Total Patients" value={total_patients} color="violet" />
+      {/* Capacity rings */}
+      <Card>
+        <p style={{ fontSize: 11, fontWeight: 800, color: "#64748b", textTransform: "uppercase", letterSpacing: 1, marginBottom: 20 }}>City-Wide Capacity</p>
+        <div style={{ display: "flex", justifyContent: "space-around", flexWrap: "wrap", gap: 20 }}>
+          <ProgressRing label="Bed Occupancy" value={totalBeds - availBeds} max={totalBeds} icon="🛏️" color="emerald" />
+          <ProgressRing label="Fleet Active" value={ambDispatched} max={ambulances.length} icon="🚑" color="amber" />
         </div>
+      </Card>
 
-        <div className="grid grid-cols-3 gap-4">
-          <StatCard icon="⏳" label="Pending Bookings" value={pending_bookings} color="amber" />
-          <StatCard icon="📡" label="Active Dispatches" value={active_dispatches} color="blue" />
-          <StatCard icon="🏥" label="Active Hospitals" value={hospitals.length} color="cyan" />
-        </div>
-
-        {/* Two-column list */}
-        <div className="grid lg:grid-cols-2 gap-6">
-          {/* Recent Bookings */}
-          <Card>
-            <SectionTitle>📋 Recent Bookings</SectionTitle>
-            {recent_bookings.length === 0
-              ? <EmptyState icon="📋" message="No bookings yet" />
-              : (
-                <div className="space-y-2">
-                  {recent_bookings.map((b) => (
-                    <div key={b.id}
-                      className="flex items-center justify-between py-2.5 border-b border-white/5 last:border-0 gap-3">
-                      {/* Avatar */}
-                      <div className="w-8 h-8 rounded-full bg-violet-500/20 border border-violet-500/30 flex items-center justify-center text-xs font-black text-violet-300 flex-shrink-0">
-                        {(b.patient_profiles?.users?.full_name || "?")[0].toUpperCase()}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-white text-sm font-semibold truncate">{b.patient_profiles?.users?.full_name || "Unknown"}</p>
-                        <p className="text-white/40 text-xs truncate">{b.hospitals?.name} — {b.beds?.bed_type}</p>
-                      </div>
-                      <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                        <StatusBadge status={b.status} />
-                        {b.booking_type === "emergency" && <StatusBadge status="emergency" />}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-          </Card>
-
-          {/* Recent Dispatches */}
-          <Card>
-            <SectionTitle>🚑 Recent Dispatches</SectionTitle>
-            {recent_dispatches.length === 0
-              ? <EmptyState icon="🚑" message="No dispatches" />
-              : (
-                <div className="space-y-2">
-                  {recent_dispatches.map((d) => (
-                    <div key={d.id}
-                      className="flex items-center justify-between py-2.5 border-b border-white/5 last:border-0 gap-3">
-                      <div
-                        className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 text-base"
-                        style={{ background: d.priority === "emergency" ? "rgba(239,68,68,0.2)" : "rgba(251,191,36,0.15)" }}
-                      >
-                        🚑
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-white text-sm font-semibold truncate">{d.patient_profiles?.users?.full_name || "Anonymous"}</p>
-                        <p className="text-white/40 text-xs truncate">{d.pickup_address}</p>
-                        <p className="text-white/30 text-xs">{d.ambulances?.vehicle_number}</p>
-                      </div>
-                      <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                        <StatusBadge status={d.status} />
-                        {d.priority === "emergency" && (
-                          <span className="text-red-400 text-xs font-black animate-pulse">🆘 EMERGENCY</span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-          </Card>
-        </div>
+      {/* Key stats */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16 }}>
+        <StatCard icon="🛏️" label="Available Beds" value={availBeds} sub={`of ${totalBeds} total`} color="emerald" />
+        <StatCard icon="🚑" label="Ambulances Free" value={ambAvail} sub={`${ambDispatched} dispatched`} color="amber" />
+        <StatCard icon="👥" label="Total Patients" value={totalPatients} color="violet" />
+        <StatCard icon="🏥" label="Hospitals" value={hospitals.length} color="blue" />
       </div>
-    );
-  }
 
-  /* ── HOSPITALS ── */
-  if (section === "hospitals") return (
-    <div className="space-y-6">
-      <DashboardHeader title="🏥 All Hospitals" subtitle={`${hospitals.length} registered facilities`} />
-      <div className="grid gap-4">
-        {hospitals.map((h) => {
-          const bedPct = h.total_beds ? Math.round(((h.total_beds - h.available_beds) / h.total_beds) * 100) : 0;
-          const borderColor = bedPct > 80 ? "#f87171" : bedPct > 60 ? "#fbbf24" : "#34d399";
-          return (
-            <Card key={h.id} className="hover:border-white/20 transition-colors">
-              <div
-                className="absolute left-0 top-4 bottom-4 w-1 rounded-r-full"
-                style={{ background: borderColor, position: "relative", display: "none" }}
-              />
-              <div className="flex items-start justify-between gap-6">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-1">
-                    <div
-                      className="w-2 h-2 rounded-full flex-shrink-0"
-                      style={{ background: borderColor }}
-                    />
-                    <p className="text-white font-bold text-lg">{h.name}</p>
-                  </div>
-                  <p className="text-white/40 text-sm mb-4">📍 {h.city}</p>
-                  <div className="grid grid-cols-3 gap-4">
-                    <BedBar label="General" available={h.available_beds} total={h.total_beds} />
-                    <BedBar label="ICU" available={h.available_icu} total={h.total_icu || 0} />
-                    <BedBar label="NICU" available={h.available_nicu} total={h.total_nicu || 0} />
-                  </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+        <StatCard icon="⏳" label="Pending Bookings" value={pendingBk} color="amber" />
+        <StatCard icon="📡" label="Active Dispatches" value={activeDisp} color="blue" />
+        <StatCard icon="👤" label="Total Users" value={users.length} color="cyan" />
+      </div>
+
+      {/* Two-column recent lists */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+        <Card>
+          <SectionTitle>📋 Recent Bookings</SectionTitle>
+          {bookings.length === 0
+            ? <EmptyState icon="📋" message="No bookings yet" />
+            : bookings.slice(0, 8).map(b => (
+              <div key={b.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid #f1f5f9" }}>
+                <div>
+                  <p style={{ fontSize: 12, fontWeight: 700, color: "#0f172a", margin: 0 }}>{b.hospitals?.name || "—"}</p>
+                  <p style={{ fontSize: 11, color: "#94a3b8", margin: 0 }}>{b.beds?.bed_type} — {b.beds?.bed_number}</p>
                 </div>
-                <div className="text-right flex-shrink-0">
-                  <p className="text-white/40 text-xs mb-1 font-semibold uppercase tracking-wider">OPD Queue</p>
-                  <p className={`text-3xl font-black ${h.opd_queue_count > 30 ? "text-red-400" : "text-white"}`}>
-                    {h.opd_queue_count}
-                  </p>
-                  <p className="text-white/30 text-xs">patients</p>
-                </div>
+                <StatusBadge status={b.status} />
               </div>
-              <p className="text-white/20 text-xs mt-3 pt-3 border-t border-white/5">
-                🕐 Updated: {new Date(h.updated_at).toLocaleTimeString("en-IN")}
-              </p>
-            </Card>
-          );
-        })}
+            ))
+          }
+        </Card>
+        <Card>
+          <SectionTitle>🚑 Recent Dispatches</SectionTitle>
+          {dispatches.length === 0
+            ? <EmptyState icon="🚑" message="No dispatches" />
+            : dispatches.slice(0, 8).map(d => (
+              <div key={d.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid #f1f5f9" }}>
+                <div>
+                  <p style={{ fontSize: 12, fontWeight: 700, color: "#0f172a", margin: 0 }}>{d.ambulances?.vehicle_number || "—"}</p>
+                  <p style={{ fontSize: 11, color: "#94a3b8", margin: 0 }}>{d.hospitals?.name || d.pickup_address || "—"}</p>
+                </div>
+                <StatusBadge status={d.status} />
+              </div>
+            ))
+          }
+        </Card>
       </div>
     </div>
   );
 
-  /* ── AMBULANCES ── */
-  if (section === "ambulances") return (
-    <div className="space-y-6">
-      <DashboardHeader title="🚑 Fleet Overview" subtitle="Real-time ambulance status" />
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard icon="✅" label="Available" value={a.available} color="emerald" />
-        <StatCard icon="🔴" label="Dispatched" value={a.dispatched} color="red" />
-        <StatCard icon="🔧" label="Maintenance" value={a.maintenance} color="amber" />
-        <StatCard icon="📊" label="Total Fleet" value={a.total} color="blue" />
-      </div>
-      <Card>
-        <SectionTitle>Active Dispatch Log</SectionTitle>
-        {recent_dispatches.length === 0
-          ? <EmptyState icon="🚑" message="No active dispatches" />
-          : (
-            <div className="space-y-3">
-              {recent_dispatches.map((d) => (
-                <div key={d.id}
-                  className={`p-4 rounded-xl border flex items-start gap-4 ${d.priority === "emergency" ? "border-red-500/30 bg-red-500/5" : "border-white/8 bg-white/3"}`}>
-                  <span className="text-2xl flex-shrink-0">🚑</span>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <p className="text-white font-bold">{d.ambulances?.vehicle_number}</p>
-                      <StatusBadge status={d.status} />
-                      {d.priority === "emergency" && <StatusBadge status="emergency" />}
-                    </div>
-                    <p className="text-white/50 text-sm truncate">{d.pickup_address}</p>
-                    <p className="text-white/30 text-xs mt-1">{new Date(d.created_at).toLocaleString("en-IN")}</p>
-                  </div>
-                </div>
-              ))}
+  /* ════════ HOSPITALS ════════ */
+  if (section === "hospitals") return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <DashboardHeader title="🏥 All Hospitals" subtitle={`${hospitals.length} registered facilities`} />
+      {hospitals.map(h => (
+        <Card key={h.id}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 16 }}>
+            <div style={{ flex: 1 }}>
+              <p style={{ fontSize: 16, fontWeight: 800, color: "#0f172a", margin: 0 }}>{h.name}</p>
+              <p style={{ fontSize: 12, color: "#94a3b8", margin: "2px 0 10px" }}>📍 {h.address}, {h.city}</p>
+              <BedBar label="General Beds" available={h.available_beds} total={h.total_beds} />
             </div>
-          )}
-      </Card>
+            <div style={{ textAlign: "right" }}>
+              <p style={{ fontSize: 11, color: "#94a3b8", fontWeight: 700, margin: 0 }}>Available</p>
+              <p style={{ fontSize: 24, fontWeight: 900, color: "#0f172a", margin: 0 }}>{h.available_beds || 0}</p>
+              <p style={{ fontSize: 11, color: "#94a3b8", margin: 0 }}>of {h.total_beds || 0}</p>
+            </div>
+          </div>
+        </Card>
+      ))}
+    </div>
+  );
+
+  /* ════════ AMBULANCES ════════ */
+  if (section === "ambulances") return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <DashboardHeader title="🚑 Fleet Overview" subtitle="All registered ambulances" />
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16 }}>
+        <StatCard icon="✅" label="Available" value={ambAvail} color="emerald" />
+        <StatCard icon="🔴" label="Dispatched" value={ambDispatched} color="red" />
+        <StatCard icon="🔧" label="Maintenance" value={ambulances.filter(a => a.status === "maintenance").length} color="amber" />
+        <StatCard icon="📊" label="Total Fleet" value={ambulances.length} color="blue" />
+      </div>
+      {ambulances.length === 0
+        ? <EmptyState icon="🚑" message="No ambulances registered" />
+        : ambulances.map(a => (
+          <Card key={a.id}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <p style={{ fontSize: 14, fontWeight: 800, color: "#0f172a", margin: 0 }}>{a.vehicle_number || "No number"}</p>
+                <p style={{ fontSize: 12, color: "#94a3b8", margin: "2px 0 0" }}>{a.ambulance_type}</p>
+              </div>
+              <StatusBadge status={a.status} />
+            </div>
+          </Card>
+        ))
+      }
+    </div>
+  );
+
+  /* ════════ PATIENTS ════════ */
+  if (section === "patients") return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <DashboardHeader title="👥 All Patients" subtitle={`${totalPatients} registered patients`} />
+      {users.filter(u => u.role === "patient").length === 0
+        ? <EmptyState icon="👤" message="No patients registered" />
+        : users.filter(u => u.role === "patient").map(u => (
+          <Card key={u.id}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <div style={{
+                  width: 36, height: 36, borderRadius: "50%", background: "#f5f3ff",
+                  border: "1px solid #ddd6fe", display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 13, fontWeight: 900, color: "#7c3aed",
+                }}>
+                  {u.full_name?.[0]?.toUpperCase() || "?"}
+                </div>
+                <div>
+                  <p style={{ fontSize: 13, fontWeight: 700, color: "#0f172a", margin: 0 }}>{u.full_name}</p>
+                  <StatusBadge status={u.is_active ? "available" : "offline"} />
+                </div>
+              </div>
+            </div>
+          </Card>
+        ))
+      }
+    </div>
+  );
+
+  /* ════════ DISPATCHES ════════ */
+  if (section === "dispatches") return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <DashboardHeader title="📡 All Dispatches" subtitle="System-wide dispatch history" />
+      {dispatches.length === 0
+        ? <EmptyState icon="📡" message="No dispatches" />
+        : dispatches.map(d => (
+          <Card key={d.id}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <div>
+                <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 4 }}>
+                  <p style={{ fontSize: 13, fontWeight: 800, color: "#0f172a", margin: 0 }}>{d.ambulances?.vehicle_number || "—"}</p>
+                  <StatusBadge status={d.status} />
+                </div>
+                <InfoRow label="Pickup" value={d.pickup_address || "GPS"} icon="📍" />
+                {d.hospitals && <InfoRow label="Hospital" value={d.hospitals.name} icon="🏥" />}
+              </div>
+              <p style={{ fontSize: 11, color: "#94a3b8" }}>
+                {new Date(d.requested_at).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+              </p>
+            </div>
+          </Card>
+        ))
+      }
+    </div>
+  );
+
+  /* ════════ ANALYTICS ════════ */
+  if (section === "analytics") return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <DashboardHeader title="📈 Analytics" subtitle="System performance overview" />
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16 }}>
+        <StatCard icon="👥" label="Total Users" value={users.length} color="violet" />
+        <StatCard icon="👤" label="Patients" value={totalPatients} color="blue" />
+        <StatCard icon="🚑" label="Drivers" value={users.filter(u => u.role === "driver").length} color="orange" />
+        <StatCard icon="🏥" label="Staff" value={users.filter(u => u.role === "hospital_staff").length} color="cyan" />
+        <StatCard icon="🔑" label="Admins" value={users.filter(u => u.role === "admin").length} color="red" />
+        <StatCard icon="📋" label="Total Bookings" value={bookings.length} color="amber" />
+      </div>
     </div>
   );
 

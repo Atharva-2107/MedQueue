@@ -1,35 +1,8 @@
-// // src/lib/api.js
-// // Central axios instance — auto-attaches JWT token from localStorage
-// import axios from "axios";
-
-// const api = axios.create({
-//   baseURL: import.meta.env.VITE_API_URL || "http://localhost:5000/api",
-//   timeout: 15000,
-// });
-
-// // Attach token on every request
-// api.interceptors.request.use((config) => {
-//   const token = localStorage.getItem("token");
-//   if (token) config.headers.Authorization = `Bearer ${token}`;
-//   return config;
-// });
-
-// // Auto-logout on 401
-// api.interceptors.response.use(
-//   (res) => res,
-//   (err) => {
-//     if (err.response?.status === 401) {
-//       localStorage.removeItem("token");
-//       localStorage.removeItem("user");
-//       window.location.href = "/login";
-//     }
-//     return Promise.reject(err);
-//   }
-// );
-
-// export default api;
+// src/lib/api.js
+// Central axios instance — attaches Supabase JWT on every request.
+// DOES NOT auto-logout on 401 — that was causing the redirect-to-login bug.
 import axios from "axios";
-import { supabase } from "../supabaseClient"; // Import your Supabase client
+import { supabase } from "../supabaseClient";
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || "http://localhost:5000/api",
@@ -38,25 +11,20 @@ const api = axios.create({
 
 // Attach Supabase token on every request
 api.interceptors.request.use(async (config) => {
-  // Wait for Supabase to give us the current active session
-  const { data: { session }, error } = await supabase.auth.getSession();
-  
-  // If a session exists, grab the secure JWT access token
+  const { data: { session } } = await supabase.auth.getSession();
   if (session?.access_token) {
     config.headers.Authorization = `Bearer ${session.access_token}`;
   }
-  
   return config;
 });
 
-// Auto-logout on 401
+// Log errors but DO NOT sign out or redirect — let the component handle it
 api.interceptors.response.use(
   (res) => res,
-  async (err) => {
+  (err) => {
     if (err.response?.status === 401) {
-      console.warn("Unauthorized API call. Signing out via Supabase...");
-      await supabase.auth.signOut(); // Properly clear the Supabase session
-      window.location.href = "/login";
+      console.warn("[api] 401 Unauthorized:", err.config?.url);
+      // Do NOT call signOut or redirect here — this was causing the login loop
     }
     return Promise.reject(err);
   }

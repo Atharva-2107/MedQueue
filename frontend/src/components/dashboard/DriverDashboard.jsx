@@ -1,188 +1,146 @@
-// src/components/dashboard/DriverDashboard.jsx
+// src/components/dashboard/DriverDashboard.jsx — Light mode, Supabase-direct
 import React, { useState, useEffect, useRef } from "react";
-import { useDashboard } from "../../hooks/useDashboard";
-import {
-  StatusBadge, SectionTitle, EmptyState, LoadingSpinner,
-  Card, StatCard, DashboardHeader, InfoRow,
-} from "../shared/UIComponents";
-import api from "../../lib/api";
-import { io } from "socket.io-client";
+import { useAuth } from "../../hooks/useAuth";
 import { supabase } from "../../supabaseClient";
+import {
+  StatCard, SectionTitle, EmptyState, LoadingSpinner,
+  Card, DashboardHeader, InfoRow, StatusBadge, AlertBox,
+} from "../shared/UIComponents";
 
 export default function DriverDashboard({ section }) {
-  const { data, loading, error, refetch } = useDashboard("driver");
-  const [updating, setUpdating] = useState(false);
+  const { user } = useAuth();
+  const [ambulance, setAmbulance] = useState(null);
+  const [dispatches, setDispatches] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [locationSharing, setLocationSharing] = useState(false);
-  const socketRef = useRef(null);
   const watchIdRef = useRef(null);
 
-  const startLocationSharing = async () => {
-    if (!data?.ambulance) return;
+  useEffect(() => {
+    if (!user) return;
+    const load = async () => {
+      setLoading(true);
+      const { data: amb } = await supabase
+        .from("ambulances")
+        .select("*")
+        .eq("driver_id", user.id)
+        .maybeSingle();
+      setAmbulance(amb);
 
-    // Get Supabase JWT for socket auth
-    const { data: { session } } = await supabase.auth.getSession();
-    const token = session?.access_token;
+      const { data: d } = await supabase
+        .from("dispatches")
+        .select("*, hospitals(name, address)")
+        .eq("ambulance_id", amb?.id)
+        .order("requested_at", { ascending: false })
+        .limit(20);
+      setDispatches(d || []);
+      setLoading(false);
+    };
+    load();
+  }, [user]);
 
-    const socket = io(import.meta.env.VITE_SOCKET_URL || "http://localhost:5000", {
-      auth: { token },
-      transports: ["websocket", "polling"],
-    });
-    socketRef.current = socket;
-    socket.on("connect", () => {
-      socket.emit("driver:register", data.ambulance.id);
-    });
-
-    watchIdRef.current = navigator.geolocation.watchPosition(
-      (pos) => {
-        socket.emit("driver:location", {
-          ambulance_id: data.ambulance.id,
-          latitude: pos.coords.latitude,
-          longitude: pos.coords.longitude,
-        });
-        api.put(`/ambulances/${data.ambulance.id}/location`, {
-          latitude: pos.coords.latitude,
-          longitude: pos.coords.longitude,
-        }).catch(() => { });
-      },
-      null,
-      { enableHighAccuracy: true, maximumAge: 5000 }
-    );
-    setLocationSharing(true);
-  };
-
-  const stopLocationSharing = () => {
-    if (watchIdRef.current) navigator.geolocation.clearWatch(watchIdRef.current);
-    if (socketRef.current) socketRef.current.disconnect();
-    setLocationSharing(false);
-  };
-
-  useEffect(() => () => stopLocationSharing(), []);
-
-
-  const updateDispatchStatus = async (id, status) => {
-    setUpdating(true);
-    try {
-      await api.put(`/ambulances/dispatches/${id}/status`, { status });
-      refetch();
-    } catch (err) {
-      alert(err.response?.data?.message || "Update failed");
-    } finally {
-      setUpdating(false);
+  const toggleGPS = () => {
+    if (locationSharing) {
+      if (watchIdRef.current) navigator.geolocation.clearWatch(watchIdRef.current);
+      setLocationSharing(false);
+    } else {
+      if (!ambulance) return;
+      watchIdRef.current = navigator.geolocation.watchPosition(
+        async (pos) => {
+          await supabase.from("ambulances").update({
+            latitude: pos.coords.latitude,
+            longitude: pos.coords.longitude,
+            last_location_update: new Date().toISOString(),
+          }).eq("id", ambulance.id);
+        },
+        null,
+        { enableHighAccuracy: true, maximumAge: 5000 }
+      );
+      setLocationSharing(true);
     }
   };
 
-  const updateAmbulanceStatus = async (status) => {
-    if (!data?.ambulance) return;
-    try {
-      await api.put(`/ambulances/${data.ambulance.id}/status`, { status });
-      refetch();
-    } catch {
-      alert("Failed to update status");
-    }
-  };
+  useEffect(() => () => { if (watchIdRef.current) navigator.geolocation.clearWatch(watchIdRef.current); }, []);
 
   if (loading) return <LoadingSpinner />;
-  if (error) return <div className="p-8 text-red-400 font-semibold">⚠️ Error: {error}</div>;
-  if (!data) return null;
 
-  const { ambulance, current_dispatch, completed_today, dispatch_history } = data;
-
-  const DISPATCH_FLOW = ["accepted", "en_route", "arrived", "completed"];
-  const nextStatus = current_dispatch
-    ? DISPATCH_FLOW[DISPATCH_FLOW.indexOf(current_dispatch.status) + 1]
-    : null;
-  const nextLabel = {
-    accepted: "🚗 Start Driving",
-    en_route: "📍 Mark Arrived",
-    arrived: "✅ Complete Job",
-    completed: null,
-  }[current_dispatch?.status];
+  const currentDispatch = dispatches.find(d => ["pending", "accepted", "en_route", "arrived"].includes(d.status));
+  const completedToday = dispatches.filter(d => d.status === "completed" && d.completed_at && new Date(d.completed_at).toDateString() === new Date().toDateString()).length;
 
   const statusColors = {
-    available: { text: "text-emerald-300", bg: "bg-emerald-500/15 border-emerald-500/25", dot: "bg-emerald-400" },
-    dispatched: { text: "text-orange-300", bg: "bg-orange-500/15 border-orange-500/25", dot: "bg-orange-400" },
-    maintenance: { text: "text-amber-300", bg: "bg-amber-500/15 border-amber-500/25", dot: "bg-amber-400" },
-    offline: { text: "text-slate-400", bg: "bg-slate-600/15 border-slate-500/25", dot: "bg-slate-400" },
+    available: { bg: "#ecfdf5", border: "#a7f3d0", text: "#059669", dot: "#10b981" },
+    dispatched: { bg: "#fff7ed", border: "#fed7aa", text: "#c2410c", dot: "#f97316" },
+    maintenance: { bg: "#fffbeb", border: "#fde68a", text: "#92400e", dot: "#f59e0b" },
+    offline: { bg: "#f8fafc", border: "#e2e8f0", text: "#64748b", dot: "#94a3b8" },
   };
   const sc = statusColors[ambulance?.status] || statusColors.offline;
 
-  /* ── HOME ── */
+  /* ════════ HOME ════════ */
   if (section === "home" || !section) return (
-    <div className="space-y-6">
-      {/* Vehicle Banner */}
-      <div
-        className="rounded-2xl p-5 border relative overflow-hidden"
-        style={{ background: "linear-gradient(135deg, rgba(251,146,60,0.12) 0%, rgba(8,12,18,0.9) 60%)", borderColor: "rgba(251,146,60,0.25)" }}
-      >
-        <div className="absolute -top-8 -right-8 w-32 h-32 rounded-full opacity-10"
-          style={{ background: "radial-gradient(circle, #fb923c 0%, transparent 70%)" }} />
-        <div className="flex items-start justify-between gap-4 relative z-10">
-          <div>
-            <p className="text-orange-400 text-xs font-bold uppercase tracking-widest mb-1">Driver Dashboard</p>
-            <h1 className="text-2xl font-black text-white">
-              {ambulance ? ambulance.vehicle_number : "No Vehicle Assigned"}
-            </h1>
-            {ambulance && (
-              <p className="text-white/40 text-sm mt-1">
-                {ambulance.ambulance_type} · {user?.full_name}
-              </p>
-            )}
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      {/* Vehicle banner */}
+      <div style={{
+        borderRadius: 16, padding: 24, border: "1px solid #fed7aa",
+        background: "linear-gradient(135deg, #fff7ed 0%, #ffffff 60%)",
+      }}>
+        <p style={{ fontSize: 11, fontWeight: 800, color: "#f97316", textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>Driver Dashboard</p>
+        <h1 style={{ fontSize: 22, fontWeight: 900, color: "#0f172a", margin: 0 }}>
+          {ambulance ? ambulance.vehicle_number : "No Vehicle Assigned"}
+        </h1>
+        {ambulance && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
+            <span style={{
+              padding: "4px 14px", borderRadius: 20, fontSize: 11, fontWeight: 800,
+              background: sc.bg, color: sc.text, border: `1px solid ${sc.border}`,
+              display: "flex", alignItems: "center", gap: 6,
+            }}>
+              <span style={{ width: 6, height: 6, borderRadius: "50%", background: sc.dot }} />
+              {ambulance.status?.toUpperCase()}
+            </span>
+            <span style={{ fontSize: 12, color: "#94a3b8" }}>{ambulance.ambulance_type}</span>
           </div>
-          {ambulance && (
-            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border ${sc.bg}`}>
-              <div className={`w-2 h-2 rounded-full ${sc.dot} ${ambulance.status === "available" ? "animate-pulse" : ""}`} />
-              <span className={`text-xs font-bold uppercase ${sc.text}`}>{ambulance.status}</span>
-            </div>
-          )}
-        </div>
+        )}
       </div>
 
       {!ambulance ? (
-        <Card className="!border-red-500/25 !bg-red-500/5">
-          <div className="flex items-center gap-4">
-            <span className="text-3xl">⚠️</span>
-            <div>
-              <p className="text-red-400 font-bold">No ambulance assigned to your account</p>
-              <p className="text-white/40 text-sm mt-0.5">Contact your admin to link an ambulance to your profile.</p>
-            </div>
-          </div>
-        </Card>
+        <AlertBox type="error">No ambulance assigned to your account. Contact your admin.</AlertBox>
       ) : (
         <>
           {/* Stats */}
-          <div className="grid grid-cols-3 gap-4">
-            <StatCard icon="✅" label="Completed Today" value={completed_today} color="emerald" />
-            <StatCard icon="📡" label="Active Job" value={current_dispatch ? "ACTIVE" : "FREE"} color={current_dispatch ? "amber" : "cyan"} />
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+            <StatCard icon="✅" label="Completed Today" value={completedToday} color="emerald" />
+            <StatCard icon="📡" label="Active Job" value={currentDispatch ? "ACTIVE" : "FREE"} color={currentDispatch ? "amber" : "cyan"} />
             <StatCard icon="🚑" label="Fleet Status" value={ambulance.status?.toUpperCase()} color={ambulance.status === "available" ? "emerald" : "amber"} />
           </div>
 
-          {/* GPS Location Sharing */}
-          <Card className={locationSharing ? "!border-emerald-500/30 !bg-emerald-500/5" : ""}>
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl ${locationSharing ? "bg-emerald-500/20 border border-emerald-500/30" : "bg-white/5 border border-white/10"}`}>
-                  📍
-                </div>
+          {/* GPS Card */}
+          <Card style={locationSharing ? { borderColor: "#a7f3d0", background: "#ecfdf5" } : {}}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <div style={{
+                  width: 40, height: 40, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 20, background: locationSharing ? "#d1fae5" : "#f1f5f9",
+                  border: `1px solid ${locationSharing ? "#a7f3d0" : "#e2e8f0"}`,
+                }}>📍</div>
                 <div>
-                  <p className="text-white font-bold text-sm">GPS Location Sharing</p>
-                  <p className="text-white/40 text-xs mt-0.5">
+                  <p style={{ fontSize: 13, fontWeight: 800, color: "#0f172a", margin: 0 }}>GPS Location Sharing</p>
+                  <p style={{ fontSize: 11, color: "#94a3b8", margin: "2px 0 0" }}>
                     {locationSharing ? "Broadcasting your location in real-time" : "Share location so dispatch can track you"}
                   </p>
                   {locationSharing && (
-                    <div className="flex items-center gap-1.5 mt-1">
-                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                      <p className="text-emerald-400 text-xs font-semibold">LIVE · updating every 5s</p>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}>
+                      <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#10b981", animation: "pulse 2s infinite" }} />
+                      <span style={{ fontSize: 11, color: "#059669", fontWeight: 700 }}>LIVE · updating</span>
                     </div>
                   )}
                 </div>
               </div>
-              <button
-                onClick={locationSharing ? stopLocationSharing : startLocationSharing}
-                className={`px-5 py-2.5 rounded-xl font-bold text-sm transition-all flex-shrink-0 ${locationSharing
-                  ? "bg-red-500/20 border border-red-500/30 text-red-300 hover:bg-red-500/30"
-                  : "bg-emerald-500 text-black hover:bg-emerald-400 shadow-lg shadow-emerald-500/25"
-                  }`}
-              >
+              <button onClick={toggleGPS} style={{
+                padding: "10px 20px", borderRadius: 12, border: "none", fontSize: 12, fontWeight: 800,
+                cursor: "pointer",
+                background: locationSharing ? "#fef2f2" : "#10b981",
+                color: locationSharing ? "#dc2626" : "#fff",
+                boxShadow: locationSharing ? "none" : "0 2px 8px rgba(16,185,129,0.3)",
+              }}>
                 {locationSharing ? "Stop Sharing" : "Start Sharing"}
               </button>
             </div>
@@ -190,21 +148,19 @@ export default function DriverDashboard({ section }) {
 
           {/* Status Control */}
           <Card>
-            <p className="text-white/50 text-xs font-bold uppercase tracking-widest mb-3">My Ambulance Status</p>
-            <div className="grid grid-cols-3 gap-2">
-              {["available", "maintenance", "offline"].map((s) => {
-                const sc2 = statusColors[s] || statusColors.offline;
+            <p style={{ fontSize: 11, fontWeight: 800, color: "#64748b", textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>My Ambulance Status</p>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
+              {["available", "maintenance", "offline"].map(s => {
+                const sc2 = statusColors[s];
                 const isActive = ambulance.status === s;
                 return (
-                  <button
-                    key={s}
-                    onClick={() => updateAmbulanceStatus(s)}
-                    className={`py-2.5 rounded-xl border text-xs font-bold capitalize transition-all flex items-center justify-center gap-1.5 ${isActive
-                      ? `${sc2.bg} ${sc2.text}`
-                      : "border-white/10 bg-white/5 text-white/40 hover:border-white/30 hover:text-white/70"
-                      }`}
-                  >
-                    {isActive && <div className={`w-1.5 h-1.5 rounded-full ${sc2.dot}`} />}
+                  <button key={s} style={{
+                    padding: "10px", borderRadius: 12, fontSize: 11, fontWeight: 800,
+                    textTransform: "capitalize", cursor: "pointer", border: `1px solid ${isActive ? sc2.border : "#e2e8f0"}`,
+                    background: isActive ? sc2.bg : "#fff", color: isActive ? sc2.text : "#94a3b8",
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                  }}>
+                    {isActive && <span style={{ width: 6, height: 6, borderRadius: "50%", background: sc2.dot }} />}
                     {s}
                   </button>
                 );
@@ -212,87 +168,25 @@ export default function DriverDashboard({ section }) {
             </div>
           </Card>
 
-          {/* Active Dispatch */}
-          {current_dispatch ? (
-            <div
-              className={`rounded-2xl p-5 border relative overflow-hidden ${current_dispatch.priority === "emergency"
-                ? "border-red-500/40 bg-red-500/5"
-                : "border-amber-500/30 bg-amber-500/5"
-                }`}
-            >
-              {/* Header */}
-              <div className="flex items-center gap-3 mb-5">
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl ${current_dispatch.priority === "emergency" ? "bg-red-500/20 border border-red-500/30 animate-pulse" : "bg-amber-500/15 border border-amber-500/25"}`}>
-                  📡
-                </div>
+          {/* Current Dispatch */}
+          {currentDispatch ? (
+            <Card style={{ borderColor: "#fecaca", background: "#fef2f2" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
+                <span style={{ fontSize: 24 }}>📡</span>
                 <div>
-                  <p className="text-white font-black text-lg">Active Dispatch</p>
-                  <div className="flex items-center gap-2">
-                    <StatusBadge status={current_dispatch.status} />
-                    {current_dispatch.priority === "emergency" && (
-                      <span className="text-red-300 text-xs font-black animate-pulse">🆘 EMERGENCY</span>
-                    )}
-                  </div>
+                  <p style={{ fontSize: 16, fontWeight: 900, color: "#0f172a", margin: 0 }}>Active Dispatch</p>
+                  <StatusBadge status={currentDispatch.status} />
                 </div>
               </div>
-
-              {/* Patient Info */}
-              {current_dispatch.patient_profiles && (
-                <div className="rounded-xl bg-white/5 border border-white/10 p-4 mb-3">
-                  <p className="text-white/40 text-xs font-bold uppercase tracking-wider mb-3">Patient Info</p>
-                  <InfoRow label="Name" value={current_dispatch.patient_profiles.users?.full_name} icon="👤" />
-                  <InfoRow label="Phone" value={current_dispatch.patient_profiles.users?.phone} icon="📞" />
-                  {current_dispatch.patient_profiles.blood_group && (
-                    <InfoRow label="Blood" value={current_dispatch.patient_profiles.blood_group} icon="🩸" />
-                  )}
-                  {current_dispatch.patient_profiles.allergies?.length > 0 && (
-                    <p className="text-orange-400 text-xs mt-2 font-medium">
-                      ⚠️ Allergies: {current_dispatch.patient_profiles.allergies.join(", ")}
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {/* Pickup */}
-              <div className="rounded-xl bg-white/5 border border-white/10 p-4 mb-3">
-                <p className="text-white/40 text-xs font-bold uppercase tracking-wider mb-2">📍 Pickup Location</p>
-                <p className="text-white font-semibold">{current_dispatch.pickup_address}</p>
-                {current_dispatch.estimated_eta && (
-                  <div className="flex items-center gap-2 mt-2">
-                    <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                    <p className="text-emerald-400 text-sm font-black">ETA: {current_dispatch.estimated_eta} min</p>
-                  </div>
-                )}
-              </div>
-
-              {/* Destination */}
-              {current_dispatch.hospitals && (
-                <div className="rounded-xl bg-white/5 border border-white/10 p-4 mb-4">
-                  <p className="text-white/40 text-xs font-bold uppercase tracking-wider mb-2">🏥 Destination Hospital</p>
-                  <p className="text-white font-semibold">{current_dispatch.hospitals.name}</p>
-                  <p className="text-white/50 text-sm">{current_dispatch.hospitals.address}</p>
-                </div>
-              )}
-
-              {/* Action */}
-              {nextStatus && nextLabel && (
-                <button
-                  onClick={() => updateDispatchStatus(current_dispatch.id, nextStatus)}
-                  disabled={updating}
-                  className="w-full py-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-black text-sm transition-all shadow-lg shadow-emerald-500/30 disabled:opacity-50 hover:shadow-emerald-500/50"
-                >
-                  {updating ? "Updating..." : nextLabel}
-                </button>
-              )}
-            </div>
+              <InfoRow label="Pickup" value={currentDispatch.pickup_address || "GPS Location"} icon="📍" />
+              {currentDispatch.hospitals && <InfoRow label="Hospital" value={currentDispatch.hospitals.name} icon="🏥" />}
+            </Card>
           ) : (
             <Card>
-              <div className="flex flex-col items-center justify-center py-8 gap-3">
-                <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-3xl">
-                  🚦
-                </div>
-                <p className="text-white font-semibold">You're Free</p>
-                <p className="text-white/30 text-sm">No active dispatch — standby for assignments</p>
+              <div style={{ textAlign: "center", padding: "32px 0" }}>
+                <span style={{ fontSize: 40, display: "block", marginBottom: 12 }}>🚦</span>
+                <p style={{ fontSize: 14, fontWeight: 700, color: "#0f172a", margin: 0 }}>You're Free</p>
+                <p style={{ fontSize: 12, color: "#94a3b8", margin: "4px 0 0" }}>No active dispatch — standby for assignments</p>
               </div>
             </Card>
           )}
@@ -301,41 +195,48 @@ export default function DriverDashboard({ section }) {
     </div>
   );
 
-  /* ── DISPATCHES ── */
-  if (section === "dispatches") return (
-    <div className="space-y-6">
-      <DashboardHeader title="📡 Dispatch History" subtitle="Your completed and past assignments" />
-      {dispatch_history.length === 0
-        ? <EmptyState icon="📡" message="No dispatches yet" />
-        : (
-          <div className="space-y-3">
-            {dispatch_history.map((d) => (
-              <Card key={d.id} className="hover:border-white/20 transition-colors">
-                <div className="flex items-start gap-4">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg flex-shrink-0 ${d.status === "completed" ? "bg-emerald-500/15 border border-emerald-500/25" : "bg-white/5 border border-white/10"}`}>
-                    🚑
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1 flex-wrap">
-                      <StatusBadge status={d.status} />
-                      {d.priority === "emergency" && <StatusBadge status="emergency" />}
-                    </div>
-                    <p className="text-white font-semibold">{d.patient_profiles?.users?.full_name || "Unknown Patient"}</p>
-                    <p className="text-white/40 text-sm truncate">{d.pickup_address}</p>
-                    <div className="flex items-center gap-4 mt-1">
-                      <p className="text-white/20 text-xs">{new Date(d.created_at).toLocaleString("en-IN")}</p>
-                      {d.completed_at && (
-                        <p className="text-emerald-400/60 text-xs">
-                          ✓ {new Date(d.completed_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </Card>
-            ))}
+  /* ════════ AMBULANCE ════════ */
+  if (section === "ambulance") return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <DashboardHeader title="🚑 My Ambulance" subtitle="Vehicle details and information" />
+      {!ambulance ? (
+        <AlertBox type="error">No ambulance linked to your account.</AlertBox>
+      ) : (
+        <Card>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+            <InfoRow label="Vehicle No" value={ambulance.vehicle_number} icon="🚗" />
+            <InfoRow label="Type" value={ambulance.ambulance_type} icon="🚑" />
+            <InfoRow label="Fuel" value={ambulance.fuel_type} icon="⛽" />
+            <InfoRow label="Year" value={ambulance.year_of_manufacture} icon="📅" />
+            <InfoRow label="License" value={ambulance.license_number} icon="📋" />
+            <InfoRow label="Status" value={ambulance.status} icon="✅" />
           </div>
-        )}
+        </Card>
+      )}
+    </div>
+  );
+
+  /* ════════ DISPATCHES ════════ */
+  if (section === "dispatches") return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <DashboardHeader title="📡 Dispatch History" subtitle="Your completed and past assignments" />
+      {dispatches.length === 0
+        ? <EmptyState icon="📡" message="No dispatches yet" />
+        : dispatches.map(d => (
+          <Card key={d.id}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+              <div>
+                <StatusBadge status={d.status} />
+                <p style={{ fontSize: 13, color: "#475569", margin: "6px 0 0" }}>{d.pickup_address || "GPS Location"}</p>
+                {d.hospitals && <InfoRow label="Hospital" value={d.hospitals.name} icon="🏥" />}
+              </div>
+              <p style={{ fontSize: 11, color: "#94a3b8" }}>
+                {new Date(d.requested_at).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+              </p>
+            </div>
+          </Card>
+        ))
+      }
     </div>
   );
 
