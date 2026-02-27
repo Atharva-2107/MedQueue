@@ -16,5 +16,8 @@
   "bugs": {
     "url": "https://github.com/Atharva-2107/MedQueue/issues"
   },
-  "homepage": "https://github.com/Atharva-2107/MedQueue#readme"
+  "homepage": "https://github.com/Atharva-2107/MedQueue#readme",
+  "devDependencies": {
+    "nodemon": "^3.1.14"
+  }
 }
