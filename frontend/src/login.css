@@ -1,0 +1,278 @@
+/* login.css — JeevanSetu */
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap");
+
+:root {
+  --med-blue:   #2563eb;
+  --ice-blue:   #e0f2fe;
+  --slate-dark: #0f172a;
+  --error:      #ef4444;
+}
+
+body {
+  margin: 0;
+  font-family: "Plus Jakarta Sans", sans-serif;
+  background: radial-gradient(ellipse at 60% 40%, #dbeafe 0%, #ffffff 45%, #e0f2fe 100%);
+  overflow: hidden;
+}
+
+/* ── LAYOUT ─────────────────────────────────────────────────────── */
+.windows-viewport {
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.master-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  width: 100%;
+  max-width: 680px;
+  z-index: 5;
+  padding: 0 20px;
+  max-height: 100vh;
+  overflow-y: auto;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.master-stack::-webkit-scrollbar { display: none; }
+
+/* ── BRAND ──────────────────────────────────────────────────────── */
+.brand-display-container { text-align: center; }
+
+.website-brand-name {
+  font-size: clamp(3.5rem, 8vw, 6rem);
+  font-weight: 900;
+  background: linear-gradient(to bottom, #2563eb, #1e40af);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin: 0;
+  letter-spacing: -3px;
+  text-shadow: none;
+}
+
+.brand-tagline {
+  color: #64748b;
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 4px 0 0;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* ── LOGIN CARD ─────────────────────────────────────────────────── */
+.login-card-premium {
+  background: rgba(255,255,255,0.97);
+  backdrop-filter: blur(30px);
+  padding: clamp(32px, 5vw, 52px);
+  border-radius: 40px;
+  box-shadow: 0 40px 120px rgba(0,40,100,0.12);
+  border: 1.5px solid rgba(255,255,255,0.8);
+  width: 100%;
+  box-sizing: border-box;
+  text-align: center;
+}
+
+.welcome-text {
+  font-size: clamp(2rem, 5vw, 3rem);
+  font-weight: 900;
+  letter-spacing: -2px;
+  margin: 0;
+  color: var(--slate-dark);
+}
+.welcome-sub {
+  font-size: 1rem;
+  color: #64748b;
+  margin-top: 8px;
+  font-weight: 500;
+}
+
+/* ── ERROR BANNER ───────────────────────────────────────────────── */
+.login-error-banner {
+  background: #fef2f2;
+  color: var(--error);
+  border: 2px solid #fecaca;
+  border-radius: 14px;
+  padding: 12px 16px;
+  font-weight: 700;
+  font-size: 0.9rem;
+  margin: 16px 0;
+  text-align: left;
+}
+
+/* ── ENTITY GRID ────────────────────────────────────────────────── */
+.entity-selection-container {
+  background: #f1f7ff;
+  padding: 20px;
+  border-radius: 28px;
+  margin: 24px 0;
+}
+
+.entity-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.entity-box-advanced {
+  background: white;
+  padding: 22px 18px;
+  border-radius: 18px;
+  cursor: pointer;
+  border: 2.5px solid transparent;
+  text-align: left;
+  transition: all 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+.entity-box-advanced:hover {
+  border-color: #bfdbfe;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(37,99,235,0.08);
+}
+.entity-box-advanced.active {
+  border-color: var(--med-blue);
+  background: #eff6ff;
+  box-shadow: 0 8px 24px rgba(37,99,235,0.15);
+}
+
+.glow-indicator {
+  width: 22px; height: 4px;
+  background: #e2e8f0;
+  border-radius: 10px;
+  margin-bottom: 10px;
+  transition: background 0.25s;
+}
+.active .glow-indicator { background: var(--med-blue); }
+
+.entity-title {
+  display: block;
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: var(--slate-dark);
+  line-height: 1.2;
+}
+.entity-subtitle {
+  display: block;
+  font-size: 0.78rem;
+  color: #64748b;
+  font-weight: 500;
+  margin-top: 3px;
+}
+
+/* ── FORM ───────────────────────────────────────────────────────── */
+.auth-form-stack { display: flex; flex-direction: column; gap: 0; }
+
+.input-field-container { margin-bottom: 14px; }
+
+.input-field-container input {
+  width: 100%;
+  padding: 18px 20px;
+  border-radius: 18px;
+  border: 2px solid #e2e8f0;
+  font-size: 1rem;
+  font-family: "Plus Jakarta Sans", sans-serif;
+  font-weight: 500;
+  box-sizing: border-box;
+  background: #f8fafc;
+  color: var(--slate-dark);
+  transition: all 0.2s;
+  outline: none;
+}
+.input-field-container input:focus {
+  border-color: var(--med-blue);
+  background: white;
+  box-shadow: 0 0 0 4px rgba(37,99,235,0.08);
+}
+
+.hint-text {
+  color: var(--error);
+  font-size: 0.8rem;
+  font-weight: 700;
+  margin: 5px 0 0 4px;
+  text-align: left;
+}
+
+/* ── ACTION BUTTON ──────────────────────────────────────────────── */
+.primary-action-btn {
+  width: 100%;
+  padding: 20px;
+  border-radius: 20px;
+  border: none;
+  background: var(--slate-dark);
+  color: white;
+  font-family: "Plus Jakarta Sans", sans-serif;
+  font-weight: 800;
+  font-size: 1.1rem;
+  cursor: pointer;
+  margin-top: 6px;
+  transition: all 0.25s;
+  letter-spacing: 0.02em;
+}
+.primary-action-btn:disabled { background: #cbd5e1; cursor: not-allowed; }
+.primary-action-btn:not(:disabled):hover {
+  background: var(--med-blue);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 30px rgba(37,99,235,0.3);
+}
+
+/* ── GOOGLE BUTTON ──────────────────────────────────────────────── */
+.google-auth-btn {
+  width: 100%;
+  padding: 16px;
+  margin-top: 12px;
+  border: 2px solid #e2e8f0;
+  background: white;
+  border-radius: 18px;
+  font-size: 0.95rem;
+  font-family: "Plus Jakarta Sans", sans-serif;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  color: var(--slate-dark);
+  transition: all 0.25s;
+}
+.google-auth-btn:hover { border-color: var(--med-blue); background: #f0f7ff; }
+
+.google-icon {
+  width: 24px; height: 24px;
+  background: var(--med-blue); color: white;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.8rem; font-weight: 900;
+}
+
+/* ── CARD FOOTER ────────────────────────────────────────────────── */
+.card-footer {
+  margin-top: 28px;
+  padding-top: 22px;
+  border-top: 1.5px solid #f1f5f9;
+}
+.signup-text { font-size: 0.95rem; color: #64748b; font-weight: 500; margin: 0; }
+.signup-trigger {
+  color: var(--med-blue); font-weight: 800; cursor: pointer;
+  text-decoration: underline; text-underline-offset: 3px;
+  margin-left: 4px; transition: color 0.2s;
+}
+.signup-trigger:hover { color: #1e3a8a; }
+
+/* ── BG ORBS ────────────────────────────────────────────────────── */
+.bg-gradient-orb {
+  position: fixed; bottom: -200px; right: -200px;
+  width: 600px; height: 600px;
+  background: radial-gradient(circle, rgba(37,99,235,0.08) 0%, transparent 70%);
+  border-radius: 50%; pointer-events: none; z-index: 0;
+}
+
+/* ── RESPONSIVE ─────────────────────────────────────────────────── */
+@media (max-height: 700px) {
+  .windows-viewport { align-items: flex-start; padding-top: 20px; }
+  .master-stack { gap: 14px; padding-bottom: 20px; }
+}
+@media (max-width: 480px) {
+  .entity-grid { grid-template-columns: 1fr 1fr; }
+  .login-card-premium { border-radius: 28px; }
+}
