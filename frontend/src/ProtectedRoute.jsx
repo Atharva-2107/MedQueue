@@ -4,27 +4,37 @@ import { Navigate } from "react-router-dom";
 import { useAuth } from "./hooks/useAuth";
 
 const ProtectedRoute = ({ children }) => {
-  // 1. Get the session and loading state directly from your global AuthProvider
-  const { session, loading } = useAuth();
+  // Get session, user profile (with role), and loading state from AuthProvider
+  const { session, user, loading } = useAuth();
 
-  // 2. Show a loading state while useAuth is fetching the DB profile
-  if (loading) {
+  // Show a loading screen while session + user profile are being fetched from DB
+  if (loading || (session && !user)) {
     return (
-      <div style={{ 
-        minHeight: "100vh", background: "#080c12", color: "white", 
-        display: "flex", alignItems: "center", justifyContent: "center" 
+      <div style={{
+        minHeight: "100vh", background: "#080c12", color: "white",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        fontFamily: "'DM Sans', sans-serif", flexDirection: "column", gap: "12px"
       }}>
-        Verifying access...
+        <div style={{
+          width: "40px", height: "40px", borderRadius: "50%",
+          border: "3px solid rgba(255,255,255,0.1)",
+          borderTopColor: "#34d399",
+          animation: "spin 0.8s linear infinite"
+        }} />
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        <p style={{ color: "rgba(255,255,255,0.4)", fontSize: "0.85rem", margin: 0 }}>
+          Loading your dashboard...
+        </p>
       </div>
     );
   }
 
-  // 3. Kick unauthorized users back to login
+  // No session → back to login
   if (!session) {
     return <Navigate to="/login" replace />;
   }
 
-  // 4. Allow access to the dashboard
+  // Session + profile ready → render the dashboard
   return children;
 };
 

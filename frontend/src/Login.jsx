@@ -84,9 +84,21 @@ export default function Login() {
         }
       }
 
-      // ── Success → Navigate immediately ─────────────────────────
-      // Because useAuth is now Strict-Mode proof, we can just jump straight to the dashboard!
-      navigate("/dashboard", { replace: true });
+      // ── Fetch role from DB then navigate ────────────────────────
+      const { data: profile } = await supabase
+        .from("users")
+        .select("role")
+        .eq("id", authData.user.id)
+        .maybeSingle();
+
+      const userRole = profile?.role || "patient";
+      const roleRoutes = {
+        patient:        "/dashboard",
+        driver:         "/dashboard",
+        admin:          "/dashboard",
+        hospital_staff: "/dashboard",
+      };
+      navigate(roleRoutes[userRole] || "/dashboard", { replace: true });
 
     } catch (err) {
       console.error("Login error:", err);
