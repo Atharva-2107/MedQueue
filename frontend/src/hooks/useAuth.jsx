@@ -1,101 +1,88 @@
 // src/hooks/useAuth.jsx
-// ─────────────────────────────────────────────────────────────────
-//  AuthContext — global user state used across all components.
-//
-//  Provides:
-//   user          → full user object from public.users table
-//   session       → raw Supabase auth session
-//   loading       → true while auth state is being determined
-//   logout()      → signs out from Supabase + clears state
-//   refreshUser() → re-fetches user data from DB
-//
-//  How it works:
-//   - On mount, listens to supabase.auth.onAuthStateChange
-//   - When session exists, fetches the user's row from public.users
-//   - This gives us the `role`, `hospital_id`, etc.
-// ─────────────────────────────────────────────────────────────────
 import { createContext, useContext, useState, useEffect } from "react";
 import { supabase } from "../supabaseClient";
 
 const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
-  const [user,    setUser]    = useState(null);  // row from public.users
-  const [session, setSession] = useState(null);  // Supabase auth session
+  const [user, setUser] = useState(null);
+  const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // ── Fetch user's DB profile ────────────────────────────────────
-  const fetchUserProfile = async (authUserId) => {
+  // ── Fetch user's DB profile with Auto-Retry ────────────────────
+  const fetchUserProfile = async (authUserId, retries = 3) => {
     try {
       const { data, error } = await supabase
         .from("users")
-        .select("id, full_name, email, phone, role, hospital_id, is_active")
+        .select("id, full_name, email, phone, role, is_active")
         .eq("id", authUserId)
         .single();
 
-      if (error || !data) {
-        console.warn("Could not fetch user profile:", error?.message);
-        return null;
-      }
+      if (error) throw error;
       return data;
-    } catch {
+    } catch (error) {
+      // If Strict Mode breaks the lock, wait and retry silently
+      if (error.message?.includes("AbortError") || error.message?.includes("Lock") || retries > 0) {
+        await new Promise(res => setTimeout(res, 500));
+        return fetchUserProfile(authUserId, retries - 1);
+      }
+      console.warn("Could not fetch user profile:", error.message);
       return null;
     }
   };
 
   // ── Listen for auth state changes ──────────────────────────────
   useEffect(() => {
-    // Initial session check
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
+    let mounted = true; // Prevent state updates if component unmounts
+
+    const initializeAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!mounted) return;
+      
       setSession(session);
       if (session?.user) {
         const profile = await fetchUserProfile(session.user.id);
-        setUser(profile);
+        // Only set user if profile exists, preventing AbortError from wiping it
+        if (profile && mounted) setUser(profile);
       }
-      setLoading(false);
-    });
+      if (mounted) setLoading(false);
+    };
 
-    // Subscribe to future changes (login, logout, token refresh)
+    initializeAuth();
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        setSession(session);
+      async (event, currentSession) => {
+        if (!mounted) return;
+        setSession(currentSession);
 
-        if (event === "SIGNED_IN" && session?.user) {
-          const profile = await fetchUserProfile(session.user.id);
-          setUser(profile);
+        if (event === "SIGNED_IN" && currentSession?.user) {
+          setLoading(true);
+          const profile = await fetchUserProfile(currentSession.user.id);
+          if (profile && mounted) setUser(profile);
+          if (mounted) setLoading(false);
         } else if (event === "SIGNED_OUT") {
-          setUser(null);
-        } else if (event === "USER_UPDATED" && session?.user) {
-          const profile = await fetchUserProfile(session.user.id);
-          setUser(profile);
+          if (mounted) {
+            setUser(null);
+            setLoading(false);
+          }
         }
-
-        setLoading(false);
       }
     );
 
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
-  // ── Logout ─────────────────────────────────────────────────────
   const logout = async () => {
     await supabase.auth.signOut();
-    localStorage.removeItem("js_user_role");
-    localStorage.removeItem("js_user_id");
     setUser(null);
     setSession(null);
   };
 
-  // ── Refresh user data from DB ──────────────────────────────────
-  const refreshUser = async () => {
-    if (!session?.user) return;
-    const profile = await fetchUserProfile(session.user.id);
-    setUser(profile);
-    return profile;
-  };
-
   return (
-    <AuthContext.Provider value={{ user, session, loading, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, session, loading, logout }}>
       {children}
     </AuthContext.Provider>
   );
