@@ -15,7 +15,7 @@ export default function Login() {
   const navigate = useNavigate();
 
   const [role,       setRole]       = useState("");
-  const [identifier, setIdentifier] = useState(""); // email or phone
+  const [identifier, setIdentifier] = useState(""); 
   const [password,   setPassword]   = useState("");
   const [loading,    setLoading]    = useState(false);
   const [error,      setError]      = useState("");
@@ -80,18 +80,18 @@ export default function Login() {
 
         if (userRow && userRow.role !== role) {
           await supabase.auth.signOut();
-          throw new Error(`You're registered as "${userRow.role}". Please select the "${userRow.role}" portal.`);
+          throw new Error(`You're registered as "${userRow.role}". Please select the correct portal.`);
         }
       }
 
-      // ── Success → go to dashboard ────────────────────────────
+      // ── Success → Navigate immediately ─────────────────────────
+      // Because useAuth is now Strict-Mode proof, we can just jump straight to the dashboard!
       navigate("/dashboard", { replace: true });
 
     } catch (err) {
       console.error("Login error:", err);
       setError(err.message || "Login failed. Please try again.");
-    } finally {
-      setLoading(false);
+      setLoading(false); 
     }
   };
 
@@ -150,7 +150,7 @@ export default function Login() {
             </div>
           </section>
 
-          {/* Form — NOTE: onSubmit is on the <form>, button is type="submit" */}
+          {/* Form */}
           <form className="auth-form-stack" onSubmit={handleLogin}>
             <div className="input-field-container">
               <input
@@ -177,7 +177,6 @@ export default function Login() {
               )}
             </div>
 
-            {/* type="submit" — this is what was broken before */}
             <button type="submit" className="primary-action-btn"
               disabled={!isFormValid || loading}>
               {btnLabel}

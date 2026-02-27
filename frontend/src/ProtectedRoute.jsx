@@ -1,39 +1,30 @@
-import React, { useEffect, useState } from "react";
+// src/ProtectedRoute.jsx
+import React from "react";
 import { Navigate } from "react-router-dom";
-import { supabase } from "./supabaseClient";
+import { useAuth } from "./hooks/useAuth";
 
 const ProtectedRoute = ({ children }) => {
-  const [session, setSession] = useState(null);
-  const [loading, setLoading] = useState(true);
+  // 1. Get the session and loading state directly from your global AuthProvider
+  const { session, loading } = useAuth();
 
-  useEffect(() => {
-    // Check for an existing session on load
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setLoading(false);
-    });
-
-    // Listen for auth events (like logging in or out)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setLoading(false);
-    });
-
-    // Cleanup listener on unmount
-    return () => subscription.unsubscribe();
-  }, []);
-
-  // Show a loading state while checking auth
+  // 2. Show a loading state while useAuth is fetching the DB profile
   if (loading) {
-    return <div className="loading-screen">Verifying access...</div>;
+    return (
+      <div style={{ 
+        minHeight: "100vh", background: "#080c12", color: "white", 
+        display: "flex", alignItems: "center", justifyContent: "center" 
+      }}>
+        Verifying access...
+      </div>
+    );
   }
 
-  // Kick unauthorized users back to login
+  // 3. Kick unauthorized users back to login
   if (!session) {
     return <Navigate to="/login" replace />;
   }
 
-  // Allow access
+  // 4. Allow access to the dashboard
   return children;
 };
 
