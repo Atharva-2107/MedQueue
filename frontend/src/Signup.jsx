@@ -289,6 +289,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "./supabaseClient";
+import { useAuth } from "./hooks/useAuth";
 import "./signup.css";
 
 const ROLES = [
@@ -300,6 +301,7 @@ const ROLES = [
 
 export default function Signup() {
   const navigate = useNavigate();
+  const { loadUserProfile } = useAuth();
 
   // Core State
   const [role, setRole] = useState("patient");
@@ -415,8 +417,10 @@ export default function Signup() {
         setSuccess("Account created! Please log in manually.");
         setTimeout(() => navigate("/login"), 2000);
       } else {
+        // Push user into AuthContext before navigating so ProtectedRoute doesn't bounce
+        await loadUserProfile(authData.user.id);
         setSuccess("✅ Account created successfully!");
-        navigate("/dashboard");
+        navigate("/dashboard", { replace: true });
       }
 
     } catch (err) {
@@ -434,7 +438,7 @@ export default function Signup() {
     <div className="signup-wrapper">
       <nav className="web-nav">
         <div className="nav-container">
-          <div className="logo">Jeevan<span>Setu</span></div>
+          <div className="logo">Med<span>Queue</span></div>
           <button className="login-btn-pill" onClick={() => navigate("/login")}>
             Login to Account
           </button>
@@ -443,7 +447,7 @@ export default function Signup() {
 
       <main className="main-content">
         <header className="hero-section">
-          <span className="hero-badge">JeevanSetu — Health-Tech Ecosystem</span>
+          <span className="hero-badge">MedQueue — Health-Tech Ecosystem</span>
           <h1>Join the Network</h1>
           <p>Integrated Emergency Response & Healthcare Management</p>
         </header>
@@ -488,11 +492,11 @@ export default function Signup() {
                 </div>
                 <div className="input-field">
                   <label>Phone Number *</label>
-                  <input 
-                    type="tel" 
-                    value={phone} 
-                    onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))} 
-                    required 
+                  <input
+                    type="tel"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                    required
                   />
                 </div>
                 <div className="input-field">
@@ -514,7 +518,7 @@ export default function Signup() {
                     <div className="input-field full"><label>Address</label><input type="text" onChange={(e) => setAddress(e.target.value)} /></div>
                   </div>
                 )}
-                
+
                 {role === "driver" && (
                   <div className="form-input-grid">
                     <div className="input-field"><label>License No.</label><input type="text" onChange={(e) => setLicenseNo(e.target.value)} /></div>

@@ -1,0 +1,543 @@
+/* src/components/onboarding/onboarding.css */
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;0,9..40,900;1,9..40,400&display=swap');
+
+/* ── Base ─────────────────────────────────────────────────────── */
+.onb-root {
+    min-height: 100vh;
+    background: #080c12;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 32px 16px;
+    font-family: 'DM Sans', sans-serif;
+    position: relative;
+    overflow-y: auto;
+}
+
+/* Ambient glows */
+.onb-root::before {
+    content: '';
+    position: fixed;
+    top: -120px;
+    left: -80px;
+    width: 480px;
+    height: 480px;
+    background: radial-gradient(circle, rgba(52, 211, 153, 0.07) 0%, transparent 70%);
+    border-radius: 50%;
+    pointer-events: none;
+}
+
+.onb-root::after {
+    content: '';
+    position: fixed;
+    bottom: -80px;
+    right: -80px;
+    width: 360px;
+    height: 360px;
+    background: radial-gradient(circle, rgba(96, 165, 250, 0.05) 0%, transparent 70%);
+    border-radius: 50%;
+    pointer-events: none;
+}
+
+/* ── Container ───────────────────────────────────────────────── */
+.onb-container {
+    width: 100%;
+    max-width: 680px;
+    position: relative;
+    z-index: 1;
+}
+
+/* ── Header ──────────────────────────────────────────────────── */
+.onb-header {
+    text-align: center;
+    margin-bottom: 36px;
+}
+
+.onb-brand-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 16px;
+    border-radius: 50px;
+    border: 1px solid rgba(52, 211, 153, 0.3);
+    background: rgba(52, 211, 153, 0.08);
+    color: #34d399;
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 18px;
+    letter-spacing: 0.3px;
+}
+
+.onb-title {
+    font-size: 32px;
+    font-weight: 900;
+    color: #fff;
+    margin: 0 0 8px;
+    letter-spacing: -0.5px;
+}
+
+.onb-subtitle {
+    color: rgba(255, 255, 255, 0.35);
+    font-size: 14px;
+    margin: 0;
+}
+
+/* ── Step Indicators ─────────────────────────────────────────── */
+.onb-steps {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 32px;
+    padding: 0 4px;
+}
+
+.onb-step-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+}
+
+.onb-step-circle {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    border: 2px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.04);
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.onb-step-circle.done {
+    background: #10b981;
+    border-color: #10b981;
+    font-size: 16px;
+    color: #000;
+    font-weight: 900;
+    transform: scale(0.9);
+}
+
+.onb-step-circle.active {
+    background: rgba(52, 211, 153, 0.15);
+    border-color: #34d399;
+    transform: scale(1.1);
+    box-shadow: 0 0 20px rgba(52, 211, 153, 0.25);
+}
+
+.onb-step-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.25);
+    text-align: center;
+    white-space: nowrap;
+    transition: color 0.3s;
+}
+
+.onb-step-label.active {
+    color: #34d399;
+}
+
+.onb-step-line {
+    flex: 1;
+    height: 2px;
+    background: rgba(255, 255, 255, 0.06);
+    margin: 0 8px;
+    margin-bottom: 22px;
+    border-radius: 2px;
+    transition: background 0.4s;
+}
+
+.onb-step-line.done {
+    background: #10b981;
+}
+
+/* ── Card ────────────────────────────────────────────────────── */
+.onb-card {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 24px;
+    padding: 36px 40px;
+    backdrop-filter: blur(16px);
+    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.4);
+}
+
+/* ── Step Header ─────────────────────────────────────────────── */
+.onb-step-header {
+    margin-bottom: 28px;
+}
+
+.onb-step-icon {
+    width: 52px;
+    height: 52px;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    background: rgba(52, 211, 153, 0.1);
+    border: 1px solid rgba(52, 211, 153, 0.2);
+    margin-bottom: 14px;
+}
+
+.onb-step-title {
+    font-size: 22px;
+    font-weight: 800;
+    color: #fff;
+    margin: 0 0 4px;
+}
+
+.onb-step-desc {
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.35);
+    margin: 0;
+}
+
+/* ── Field ───────────────────────────────────────────────────── */
+.onb-field {
+    margin-bottom: 20px;
+}
+
+.onb-label {
+    display: block;
+    font-size: 11px;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.4);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-bottom: 8px;
+}
+
+.onb-input {
+    width: 100%;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 13px 16px;
+    color: #fff;
+    font-size: 14px;
+    font-family: 'DM Sans', sans-serif;
+    outline: none;
+    transition: border-color 0.2s, background 0.2s;
+    box-sizing: border-box;
+}
+
+.onb-input:focus {
+    border-color: rgba(52, 211, 153, 0.5);
+    background: rgba(255, 255, 255, 0.07);
+}
+
+.onb-input::placeholder {
+    color: rgba(255, 255, 255, 0.18);
+}
+
+.onb-input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(0.5);
+}
+
+.onb-grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+/* ── Pill Buttons (Gender / Blood Group / Allergies) ─────────── */
+.onb-pill-grid-3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+}
+
+.onb-pill-grid-4 {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+}
+
+.onb-pill {
+    padding: 11px 8px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.04);
+    color: rgba(255, 255, 255, 0.45);
+    font-size: 13px;
+    font-weight: 600;
+    font-family: 'DM Sans', sans-serif;
+    cursor: pointer;
+    transition: all 0.18s ease;
+    text-align: center;
+}
+
+.onb-pill:hover {
+    border-color: rgba(255, 255, 255, 0.25);
+    color: rgba(255, 255, 255, 0.75);
+    background: rgba(255, 255, 255, 0.07);
+}
+
+.onb-pill.active-emerald {
+    border-color: #34d399;
+    background: rgba(52, 211, 153, 0.12);
+    color: #34d399;
+}
+
+.onb-pill.active-red {
+    border-color: #f87171;
+    background: rgba(248, 113, 113, 0.12);
+    color: #f87171;
+}
+
+.onb-pill.active-orange {
+    border-color: #fb923c;
+    background: rgba(251, 146, 60, 0.12);
+    color: #fb923c;
+}
+
+.onb-pill.active-violet {
+    border-color: #a78bfa;
+    background: rgba(167, 139, 250, 0.12);
+    color: #a78bfa;
+}
+
+/* ── Tag pills (allergies/conditions) ────────────────────────── */
+.onb-tag-wrap {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.onb-tag {
+    padding: 7px 14px;
+    border-radius: 50px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.04);
+    color: rgba(255, 255, 255, 0.45);
+    font-size: 12px;
+    font-weight: 600;
+    font-family: 'DM Sans', sans-serif;
+    cursor: pointer;
+    transition: all 0.18s ease;
+}
+
+.onb-tag:hover {
+    border-color: rgba(255, 255, 255, 0.25);
+    color: rgba(255, 255, 255, 0.75);
+}
+
+.onb-tag.active-orange {
+    border-color: #fb923c;
+    background: rgba(251, 146, 60, 0.12);
+    color: #fb923c;
+}
+
+.onb-tag.active-violet {
+    border-color: #a78bfa;
+    background: rgba(167, 139, 250, 0.12);
+    color: #a78bfa;
+}
+
+/* ── Textarea ────────────────────────────────────────────────── */
+.onb-textarea {
+    width: 100%;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 13px 16px;
+    color: #fff;
+    font-size: 14px;
+    font-family: 'DM Sans', sans-serif;
+    outline: none;
+    resize: vertical;
+    min-height: 90px;
+    transition: border-color 0.2s;
+    box-sizing: border-box;
+}
+
+.onb-textarea:focus {
+    border-color: rgba(52, 211, 153, 0.5);
+}
+
+.onb-textarea::placeholder {
+    color: rgba(255, 255, 255, 0.15);
+}
+
+/* ── Alert box ───────────────────────────────────────────────── */
+.onb-alert {
+    padding: 14px 16px;
+    border-radius: 12px;
+    margin-top: 4px;
+}
+
+.onb-alert-amber {
+    background: rgba(251, 191, 36, 0.08);
+    border: 1px solid rgba(251, 191, 36, 0.2);
+}
+
+.onb-alert-blue {
+    background: rgba(96, 165, 250, 0.08);
+    border: 1px solid rgba(96, 165, 250, 0.2);
+}
+
+.onb-alert-title {
+    font-size: 13px;
+    font-weight: 700;
+    margin: 0 0 4px;
+}
+
+.onb-alert-amber .onb-alert-title {
+    color: #fbbf24;
+}
+
+.onb-alert-blue .onb-alert-title {
+    color: #60a5fa;
+}
+
+.onb-alert-body {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.4);
+    margin: 0;
+    line-height: 1.6;
+}
+
+/* ── Error banner ────────────────────────────────────────────── */
+.onb-error {
+    padding: 12px 16px;
+    border-radius: 12px;
+    background: rgba(248, 113, 113, 0.08);
+    border: 1px solid rgba(248, 113, 113, 0.25);
+    color: #f87171;
+    font-size: 13px;
+    font-weight: 500;
+    margin-bottom: 20px;
+}
+
+/* ── Summary (Step 4) ────────────────────────────────────────── */
+.onb-summary {
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    padding-top: 20px;
+    margin-top: 20px;
+}
+
+.onb-summary-title {
+    font-size: 11px;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.3);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-bottom: 14px;
+}
+
+.onb-summary-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 7px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    gap: 12px;
+}
+
+.onb-summary-row:last-child {
+    border-bottom: none;
+}
+
+.onb-summary-key {
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.35);
+}
+
+.onb-summary-val {
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.8);
+    font-weight: 600;
+    text-transform: capitalize;
+    text-align: right;
+}
+
+/* ── Navigation Buttons ──────────────────────────────────────── */
+.onb-nav {
+    display: flex;
+    gap: 12px;
+    margin-top: 32px;
+}
+
+.onb-btn-back {
+    flex: 1;
+    padding: 14px;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.05);
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 14px;
+    font-weight: 600;
+    font-family: 'DM Sans', sans-serif;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.onb-btn-back:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.85);
+}
+
+.onb-btn-next {
+    flex: 2;
+    padding: 14px;
+    border-radius: 14px;
+    border: none;
+    background: #10b981;
+    color: #000;
+    font-size: 15px;
+    font-weight: 800;
+    font-family: 'DM Sans', sans-serif;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 4px 20px rgba(16, 185, 129, 0.3);
+}
+
+.onb-btn-next:hover {
+    background: #34d399;
+    box-shadow: 0 6px 24px rgba(52, 211, 153, 0.4);
+    transform: translateY(-1px);
+}
+
+.onb-btn-next:disabled {
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.2);
+    cursor: not-allowed;
+    box-shadow: none;
+    transform: none;
+}
+
+.onb-btn-skip {
+    width: 100%;
+    margin-top: 12px;
+    padding: 10px;
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.2);
+    font-size: 12px;
+    font-family: 'DM Sans', sans-serif;
+    cursor: pointer;
+    transition: color 0.2s;
+}
+
+.onb-btn-skip:hover {
+    color: rgba(255, 255, 255, 0.45);
+}
+
+@media (max-width: 600px) {
+    .onb-card {
+        padding: 24px 20px;
+    }
+
+    .onb-grid-2 {
+        grid-template-columns: 1fr;
+    }
+
+    .onb-pill-grid-4 {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}

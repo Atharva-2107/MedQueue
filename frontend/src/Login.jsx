@@ -2,23 +2,25 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "./supabaseClient";
+import { useAuth } from "./hooks/useAuth";
 import "./login.css";
 
 const ROLES = [
-  { id: "patient",        label: "Patient",  desc: "Access Healthcare" },
-  { id: "driver",         label: "Driver",   desc: "Emergency Transit" },
-  { id: "admin",          label: "Admin",    desc: "System Control" },
+  { id: "patient", label: "Patient", desc: "Access Healthcare" },
+  { id: "driver", label: "Driver", desc: "Emergency Transit" },
+  { id: "admin", label: "Admin", desc: "System Control" },
   { id: "hospital_staff", label: "Hospital", desc: "Facility Management" },
 ];
 
 export default function Login() {
   const navigate = useNavigate();
+  const { loadUserProfile } = useAuth();
 
-  const [role,       setRole]       = useState("");
-  const [identifier, setIdentifier] = useState(""); 
-  const [password,   setPassword]   = useState("");
-  const [loading,    setLoading]    = useState(false);
-  const [error,      setError]      = useState("");
+  const [role, setRole] = useState("");
+  const [identifier, setIdentifier] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -49,7 +51,7 @@ export default function Login() {
 
       // ── Sign in with Supabase Auth ───────────────────────────
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        email:    emailToUse,
+        email: emailToUse,
         password: password,
       });
 
@@ -84,26 +86,15 @@ export default function Login() {
         }
       }
 
-      // ── Fetch role from DB then navigate ────────────────────────
-      const { data: profile } = await supabase
-        .from("users")
-        .select("role")
-        .eq("id", authData.user.id)
-        .maybeSingle();
-
-      const userRole = profile?.role || "patient";
-      const roleRoutes = {
-        patient:        "/dashboard",
-        driver:         "/dashboard",
-        admin:          "/dashboard",
-        hospital_staff: "/dashboard",
-      };
-      navigate(roleRoutes[userRole] || "/dashboard", { replace: true });
+      // ── Load profile into AuthContext THEN navigate ─────────────
+      // This ensures the ProtectedRoute finds user != null immediately.
+      await loadUserProfile(authData.user.id);
+      navigate("/dashboard", { replace: true });
 
     } catch (err) {
       console.error("Login error:", err);
       setError(err.message || "Login failed. Please try again.");
-      setLoading(false); 
+      setLoading(false);
     }
   };
 
@@ -120,9 +111,9 @@ export default function Login() {
 
   const btnLabel = loading ? "Verifying..."
     : !identifier ? "Enter Email or Phone"
-    : password.length < 6 ? "Password too short"
-    : role ? `Continue as ${ROLES.find(r => r.id === role)?.label}`
-    : "Continue";
+      : password.length < 6 ? "Password too short"
+        : role ? `Continue as ${ROLES.find(r => r.id === role)?.label}`
+          : "Continue";
 
   return (
     <div className="windows-viewport">
@@ -130,7 +121,7 @@ export default function Login() {
 
         {/* Brand */}
         <div className="brand-display-container">
-          <h1 className="website-brand-name">JeevanSetu</h1>
+          <h1 className="website-brand-name">MedQueue</h1>
           <p className="brand-tagline">Emergency Response Network</p>
         </div>
 

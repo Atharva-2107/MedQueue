@@ -1,96 +1,90 @@
 // socket/socketManager.js
 // ─────────────────────────────────────────────────────────────────
-//  Socket.IO Manager
-//
-//  Rooms:
-//   hospital_{id}    → staff see bed/OPD updates for their hospital
-//   driver_{ambId}   → driver gets dispatch assignments
-//   admin            → admin gets everything
-//   patient_{userId} → patient gets their booking/dispatch status
-//
-//  Events emitted from controllers:
-//   bed_update               → bed status changed
-//   booking_status_changed   → booking confirmed/discharged
-//   ambulance_location_update→ GPS ping from driver
-//   ambulance_status_update  → ambulance available/dispatched
-//   new_dispatch             → driver receives a new job
-//   dispatch_status_update   → patient/admin tracks dispatch progress
-//   opd_update               → OPD queue count changed
+//  Socket.IO Manager — uses Supabase JWT for auth (no JWT_SECRET needed)
 // ─────────────────────────────────────────────────────────────────
-const jwt = require("jsonwebtoken");
+const supabase = require("../config/supabase");
 
 const initSocket = (io) => {
-  // ── Auth middleware for socket connections ─────────────────────
-  io.use((socket, next) => {
+  // ── Auth middleware — validate Supabase JWT ────────────────────
+  io.use(async (socket, next) => {
     const token = socket.handshake.auth?.token || socket.handshake.query?.token;
 
     if (!token) {
-      // Allow anonymous connections for public read-only rooms
       socket.user = null;
-      return next();
+      return next(); // Allow anonymous connections for public feeds
     }
 
     try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      socket.user = decoded;
-      next();
-    } catch (err) {
-      // Don't block — just mark as unauthenticated
+      const { data: { user: supaUser }, error } = await supabase.auth.getUser(token);
+      if (error || !supaUser) {
+        socket.user = null;
+        return next();
+      }
+
+      // Fetch role + hospital_id from DB
+      const { data: dbUser } = await supabase
+        .from("users")
+        .select("id, role, hospital_id, full_name")
+        .eq("id", supaUser.id)
+        .single();
+
+      socket.user = dbUser || null;
+    } catch {
       socket.user = null;
-      next();
     }
+    next();
   });
 
   io.on("connection", (socket) => {
     const user = socket.user;
-    console.log(`[SOCKET] Connected: ${socket.id} | User: ${user?.id || "anonymous"}`);
+    console.log(`[SOCKET] Connected: ${socket.id} | Role: ${user?.role || "public"}`);
 
-    // ── Client joins relevant rooms ──────────────────────────────
+    // ── Auto-join role-based rooms ─────────────────────────────────
     if (user) {
       if (user.role === "admin") {
         socket.join("admin");
       }
-
       if (user.role === "hospital_staff" && user.hospital_id) {
         socket.join(`hospital_${user.hospital_id}`);
+        console.log(`[SOCKET] Staff ${user.id} joined hospital_${user.hospital_id}`);
       }
-
+      if (user.role === "patient") {
+        socket.join(`patient_${user.id}`);
+      }
       if (user.role === "driver") {
-        // Driver joins room named after their ambulance — set by client
         socket.on("driver:register", (ambulanceId) => {
           socket.join(`driver_${ambulanceId}`);
           console.log(`[SOCKET] Driver ${user.id} joined driver_${ambulanceId}`);
         });
       }
-
-      if (user.role === "patient") {
-        socket.join(`patient_${user.id}`);
-      }
     }
 
-    // ── Client can subscribe to a specific hospital feed (public) ─
+    // ── Public room: subscribe to a hospital's bed feed ────────────
     socket.on("subscribe:hospital", (hospitalId) => {
       socket.join(`hospital_${hospitalId}`);
       console.log(`[SOCKET] ${socket.id} subscribed to hospital_${hospitalId}`);
     });
 
-    // ── Client can track specific ambulance ──────────────────────
+    // ── Track specific ambulance GPS ───────────────────────────────
     socket.on("track:ambulance", (ambulanceId) => {
       socket.join(`track_ambulance_${ambulanceId}`);
+      console.log(`[SOCKET] ${socket.id} tracking ambulance_${ambulanceId}`);
     });
 
-    // ── Driver sends location pings via socket (alternative to HTTP) ─
+    // ── Driver sends GPS ping ──────────────────────────────────────
     socket.on("driver:location", async (data) => {
-      // data = { ambulance_id, latitude, longitude }
       if (!user || user.role !== "driver") return;
+      const { ambulance_id, latitude, longitude } = data;
 
-      // Broadcast location to anyone tracking this ambulance
-      io.to(`track_ambulance_${data.ambulance_id}`).emit("ambulance_location_update", {
-        ambulance_id: data.ambulance_id,
-        latitude: data.latitude,
-        longitude: data.longitude,
+      // Broadcast to anyone tracking this ambulance (patients, admin, hospitals)
+      io.to(`track_ambulance_${ambulance_id}`).emit("ambulance_location_update", {
+        ambulance_id,
+        latitude,
+        longitude,
         timestamp: new Date().toISOString(),
       });
+      // Also broadcast to admin room
+      io.to("admin").emit("ambulance_location_update", { ambulance_id, latitude, longitude, timestamp: new Date().toISOString() });
     });
 
     socket.on("disconnect", () => {

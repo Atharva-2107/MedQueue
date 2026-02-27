@@ -9,30 +9,37 @@
 // ─────────────────────────────────────────────────────────────────
 require("dotenv").config();
 
-const express    = require("express");
-const http       = require("http");
+const express = require("express");
+const http = require("http");
 const { Server } = require("socket.io");
-const cors       = require("cors");
-const helmet     = require("helmet");
-const morgan     = require("morgan");
-const rateLimit  = require("express-rate-limit");
+const cors = require("cors");
+const helmet = require("helmet");
+const morgan = require("morgan");
+const rateLimit = require("express-rate-limit");
 
-const authRoutes       = require("./routes/authRoutes");
-const patientRoutes    = require("./routes/patientRoutes");
-const bedRoutes        = require("./routes/bedRoutes");
-const ambulanceRoutes  = require("./routes/ambulanceRoutes");
+const authRoutes = require("./routes/authRoutes");
+const patientRoutes = require("./routes/patientRoutes");
+const bedRoutes = require("./routes/bedRoutes");
+const ambulanceRoutes = require("./routes/ambulanceRoutes");
 const monitoringRoutes = require("./routes/monitoringRoutes");
+const dashboardRoutes = require("./routes/dashboardRoutes");
+const onboardingRoutes = require("./routes/onboardingRoutes");
+const emergencyRoutes = require("./routes/emergencyRoutes");
 const { errorHandler } = require("./middleware/errorHandler");
-const { initSocket }   = require("./socket/socketManager");
+const { initSocket } = require("./socket/socketManager");
 const { snapshotBedState } = require("./controllers/monitoringController");
 
-const app    = express();
+const app = express();
 const server = http.createServer(app);
 
 // ── Socket.IO ─────────────────────────────────────────────────────
 const io = new Server(server, {
   cors: {
-    origin: process.env.CLIENT_URL || "http://localhost:3000",
+    origin: [
+      process.env.CLIENT_URL || "http://localhost:5173",
+      "http://localhost:3000",
+      "http://localhost:5173",
+    ],
     methods: ["GET", "POST"],
     credentials: true,
   },
@@ -43,7 +50,11 @@ app.set("io", io); // make io accessible in controllers via req.app.get("io")
 // ── Core Middleware ───────────────────────────────────────────────
 app.use(helmet());
 app.use(cors({
-  origin: process.env.CLIENT_URL || "http://localhost:3000",
+  origin: [
+    process.env.CLIENT_URL || "http://localhost:5173",
+    "http://localhost:3000",
+    "http://localhost:5173",
+  ],
   credentials: true,
 }));
 app.use(morgan("dev"));
@@ -60,11 +71,14 @@ const limiter = rateLimit({
 app.use("/api/", limiter);
 
 // ── Routes ────────────────────────────────────────────────────────
-app.use("/api/auth",       authRoutes);
-app.use("/api/patients",   patientRoutes);
-app.use("/api/beds",       bedRoutes);
+app.use("/api/auth", authRoutes);
+app.use("/api/patients", patientRoutes);
+app.use("/api/beds", bedRoutes);
 app.use("/api/ambulances", ambulanceRoutes);
 app.use("/api/monitoring", monitoringRoutes);
+app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/onboarding", onboardingRoutes);
+app.use("/api/emergency", emergencyRoutes); // public — no auth needed
 
 // ── Health check ─────────────────────────────────────────────────
 app.get("/health", (req, res) => {

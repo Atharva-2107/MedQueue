@@ -1,10 +1,8 @@
 // middleware/auth.js
 // ─────────────────────────────────────────────────────────────────
-//  JWT auth middleware.
-//  Every protected route calls verifyToken first.
-//  Role-specific guards: requireAdmin, requireDriver, etc.
+//  JWT auth middleware – verifies Supabase JWTs directly via
+//  the Supabase admin client's getUser() so no JWT_SECRET needed.
 // ─────────────────────────────────────────────────────────────────
-const jwt = require("jsonwebtoken");
 const supabase = require("../config/supabase");
 
 // ── Core token verifier ──────────────────────────────────────────
@@ -16,17 +14,22 @@ const verifyToken = async (req, res, next) => {
     }
 
     const token = authHeader.split(" ")[1];
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    // Confirm user still exists and is active
-    const { data: user, error } = await supabase
+    // Verify with Supabase (handles signature + expiry automatically)
+    const { data: { user: supaUser }, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !supaUser) {
+      return res.status(401).json({ success: false, message: "Invalid or expired token" });
+    }
+
+    // Fetch full user profile from DB (includes role, hospital_id, etc.)
+    const { data: user, error: dbError } = await supabase
       .from("users")
       .select("id, full_name, email, role, hospital_id, is_active")
-      .eq("id", decoded.id)
+      .eq("id", supaUser.id)
       .single();
 
-    if (error || !user) {
-      return res.status(401).json({ success: false, message: "User not found" });
+    if (dbError || !user) {
+      return res.status(401).json({ success: false, message: "User profile not found" });
     }
     if (!user.is_active) {
       return res.status(403).json({ success: false, message: "Account deactivated" });
@@ -35,10 +38,8 @@ const verifyToken = async (req, res, next) => {
     req.user = user;
     next();
   } catch (err) {
-    if (err.name === "TokenExpiredError") {
-      return res.status(401).json({ success: false, message: "Token expired" });
-    }
-    return res.status(401).json({ success: false, message: "Invalid token" });
+    console.error("Auth middleware error:", err.message);
+    return res.status(401).json({ success: false, message: "Authentication failed" });
   }
 };
 
@@ -53,9 +54,9 @@ const requireRole = (...roles) => (req, res, next) => {
   next();
 };
 
-const requireAdmin        = requireRole("admin");
-const requireDriver       = requireRole("driver");
+const requireAdmin = requireRole("admin");
+const requireDriver = requireRole("driver");
 const requireHospitalStaff = requireRole("admin", "hospital_staff");
-const requireAny          = requireRole("admin", "hospital_staff", "driver", "patient");
+const requireAny = requireRole("admin", "hospital_staff", "driver", "patient");
 
-module.exports = { verifyToken, requireAdmin, requireDriver, requireHospitalStaff, requireRole };
+module.exports = { verifyToken, requireAdmin, requireDriver, requireHospitalStaff, requireRole, requireAny };
