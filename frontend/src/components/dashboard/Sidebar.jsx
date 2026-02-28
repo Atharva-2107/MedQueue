@@ -18,6 +18,7 @@ const NAV_ITEMS = {
     { label: "Ambulances", icon: "🚑", id: "ambulances" },
     { label: "Patients", icon: "👥", id: "patients" },
     { label: "Dispatches", icon: "📡", id: "dispatches" },
+    { label: "All Bookings", icon: "📋", id: "bookings" },
     { label: "Analytics", icon: "📈", id: "analytics" },
   ],
   hospital_staff: [

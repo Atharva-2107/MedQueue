@@ -312,9 +312,9 @@ export default function PatientDashboard({ section }) {
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(""), 6000); };
 
-  const load = async () => {
+  const load = async (isBackground = false) => {
     if (!user) return;
-    setLoading(true);
+    if (!isBackground) setLoading(true);
     const [p, a, bk, dsp] = await Promise.all([
       supabase.from("patient_profiles").select("*").eq("user_id", user.id).maybeSingle(),
       supabase.from("ambulances").select("*").eq("status", "available"),
@@ -328,7 +328,7 @@ export default function PatientDashboard({ section }) {
     setBookings(bk.data || []);
     setActiveDispatch(dsp.data || null);
     setActiveAmbulance(dsp.data?.ambulances || null);
-    setLoading(false);
+    if (!isBackground) setLoading(false);
   };
 
   useEffect(() => { load(); }, [user]);
@@ -336,13 +336,13 @@ export default function PatientDashboard({ section }) {
   useRealtime("bookings", { filter: `patient_id=eq.${user?.id}`, event: "UPDATE" }, (payload) => {
     if (payload.old?.status !== payload.new?.status) {
       showToast(`📬 Booking: ${payload.new?.status?.toUpperCase()}`);
-      load();
+      load(true);
     }
   });
 
   useRealtime("dispatches", { filter: `patient_id=eq.${user?.id}` }, () => {
     showToast("🚑 Ambulance dispatch updated!");
-    load();
+    load(true);
   });
 
   useRealtime("ambulances", { filter: activeAmbulance ? `id=eq.${activeAmbulance.id}` : undefined, event: "UPDATE" }, (payload) => {
@@ -372,8 +372,8 @@ export default function PatientDashboard({ section }) {
   /* ════════════════ HOME ════════════════ */
   if (!section || section === "home") return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20, minWidth: 0 }}>
-      {showSOS && <SOSModal userId={user.id} myCoords={coords} onClose={() => { setShowSOS(false); load(); }} />}
-      {bookModal && <BookBedModal hospital={bookModal} userId={user.id} myCoords={coords} onClose={() => setBookModal(null)} onBooked={() => { showToast("✅ Bed booked! Staff notified."); load(); }} />}
+      {showSOS && <SOSModal userId={user.id} myCoords={coords} onClose={() => { setShowSOS(false); load(true); }} />}
+      {bookModal && <BookBedModal hospital={bookModal} userId={user.id} myCoords={coords} onClose={() => setBookModal(null)} onBooked={() => { showToast("✅ Bed booked! Staff notified."); load(true); }} />}
 
       <DashboardHeader title={`Welcome back, ${firstName} 👋`} subtitle={new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" })} badge={profile?.blood_group ? `🩸 ${profile.blood_group}` : undefined} badgeColor="red" />
       {toast && <AlertBox type="success">{toast}</AlertBox>}
@@ -452,7 +452,7 @@ export default function PatientDashboard({ section }) {
             <button onClick={() => setEditProfile(false)} style={{ alignSelf: "flex-start", marginBottom: 12, padding: "8px 16px", borderRadius: 12, border: "1px solid #e2e8f0", background: "#f8fafc", color: "#64748b", fontWeight: 700, cursor: "pointer", fontSize: 13 }}>← Back to Profile</button>
           )}
           <PatientOnboarding
-            onComplete={() => { setEditProfile(false); load(); }}
+            onComplete={() => { setEditProfile(false); load(true); }}
             onSkip={profile ? () => setEditProfile(false) : undefined}
           />
         </div>
@@ -495,7 +495,7 @@ export default function PatientDashboard({ section }) {
   /* ════════════════ BOOK A BED ════════════════ */
   if (section === "book") return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      {bookModal && <BookBedModal hospital={bookModal} userId={user.id} myCoords={coords} onClose={() => setBookModal(null)} onBooked={() => { showToast("✅ Booked!"); load(); }} />}
+      {bookModal && <BookBedModal hospital={bookModal} userId={user.id} myCoords={coords} onClose={() => setBookModal(null)} onBooked={() => { showToast("✅ Booked!"); load(true); }} />}
       <DashboardHeader title="🛏️ Book a Bed" subtitle={`${nearbyHosp.length} hospitals found`} />
       {toast && <AlertBox type="success">{toast}</AlertBox>}
       {hospLoading && <AlertBox type="info">Searching hospitals near you…</AlertBox>}
@@ -507,7 +507,7 @@ export default function PatientDashboard({ section }) {
   /* ════════════════ AMBULANCE ════════════════ */
   if (section === "ambulance") return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      {showSOS && <SOSModal userId={user.id} myCoords={coords} onClose={() => { setShowSOS(false); load(); }} />}
+      {showSOS && <SOSModal userId={user.id} myCoords={coords} onClose={() => { setShowSOS(false); load(true); }} />}
       <DashboardHeader title="🚑 Ambulance Services" />
       <Card style={{ borderColor: "#fecaca", background: "#fef2f2" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 14 }}>
@@ -537,7 +537,7 @@ export default function PatientDashboard({ section }) {
   /* ════════════════ HOSPITALS ════════════════ */
   if (section === "hospitals") return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      {bookModal && <BookBedModal hospital={bookModal} userId={user.id} myCoords={coords} onClose={() => setBookModal(null)} onBooked={() => { showToast("✅ Booked!"); load(); }} />}
+      {bookModal && <BookBedModal hospital={bookModal} userId={user.id} myCoords={coords} onClose={() => setBookModal(null)} onBooked={() => { showToast("✅ Booked!"); load(true); }} />}
       <DashboardHeader title="🏥 All Hospitals" subtitle={`${nearbyHosp.length} within 10km`} />
       <div style={{ isolation: "isolate", borderRadius: 16, overflow: "hidden" }}>
         <Suspense fallback={null}><MapView myPosition={coords} hospitals={nearbyHosp} height="240px" /></Suspense>

@@ -35,7 +35,7 @@ export default function AdminDashboard({ section }) {
       const [h, a, b, d, u] = await Promise.all([
         supabase.from("hospitals").select("*").eq("is_active", true).order("name"),
         supabase.from("ambulances").select("*").order("vehicle_number"),
-        supabase.from("bookings").select("*, hospitals(name), beds(bed_number, bed_type)").order("booked_at", { ascending: false }).limit(20),
+        supabase.from("bookings").select("*, hospitals(name), beds(bed_number, bed_type, ward)").order("booked_at", { ascending: false }).limit(100),
         supabase.from("dispatches").select("*, ambulances(vehicle_number), hospitals(name)").order("requested_at", { ascending: false }).limit(20),
         supabase.from("users").select("id, full_name, role, is_active").order("created_at", { ascending: false }),
       ]);
@@ -81,6 +81,7 @@ export default function AdminDashboard({ section }) {
   const ambDispatched = ambulances.filter(a => a.status === "dispatched").length;
   const totalPatients = users.filter(u => u.role === "patient").length;
   const pendingBk = bookings.filter(b => b.status === "pending").length;
+  const admittedBk = bookings.filter(b => b.status === "admitted").length;
   const activeDisp = dispatches.filter(d => ["pending", "accepted", "en_route", "arrived"].includes(d.status)).length;
 
   /* ════════ HOME ════════ */
@@ -107,6 +108,7 @@ export default function AdminDashboard({ section }) {
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
         <StatCard icon="⏳" label="Pending Bookings" value={pendingBk} color="amber" />
+        <StatCard icon="🏨" label="Admitted Patients" value={admittedBk} color="violet" />
         <StatCard icon="📡" label="Active Dispatches" value={activeDisp} color="blue" />
         <StatCard icon="👤" label="Total Users" value={users.length} color="cyan" />
       </div>
@@ -121,7 +123,7 @@ export default function AdminDashboard({ section }) {
               <div key={b.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid #f1f5f9" }}>
                 <div>
                   <p style={{ fontSize: 12, fontWeight: 700, color: "#0f172a", margin: 0 }}>{b.hospitals?.name || "—"}</p>
-                  <p style={{ fontSize: 11, color: "#94a3b8", margin: 0 }}>{b.beds?.bed_type} — {b.beds?.bed_number}</p>
+                  <p style={{ fontSize: 11, color: "#94a3b8", margin: 0 }}>{b.beds?.bed_type || "Bed"} {b.beds?.bed_number ? `— ${b.beds.bed_number}` : ""}</p>
                 </div>
                 <StatusBadge status={b.status} />
               </div>
@@ -250,6 +252,33 @@ export default function AdminDashboard({ section }) {
           </Card>
         ))
       }
+    </div>
+  );
+
+  /* ════════ BOOKINGS ════════ */
+  if (section === "bookings") return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <DashboardHeader title="📋 All Bookings" subtitle={`${bookings.length} recent bookings system-wide`} />
+      {bookings.length === 0 ? (
+        <EmptyState icon="✅" message="No bookings right now" />
+      ) : bookings.map(b => (
+        <Card key={b.id} style={{ border: b.status === "pending" ? "2px solid #bfdbfe" : "1px solid #e2e8f0", background: b.status === "pending" ? "#f8fbff" : "#fff" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, flexWrap: "wrap" }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap", alignItems: "center" }}>
+                <StatusBadge status={b.status} />
+              </div>
+              <InfoRow label="Hospital" value={b.hospitals?.name || "—"} icon="🏥" />
+              <p style={{ fontSize: 14, fontWeight: 800, color: "#0f172a", margin: "4px 0 4px" }}>
+                🛏️ Bed {b.beds?.bed_number || "—"}
+                {b.beds?.ward && <span style={{ fontSize: 12, fontWeight: 600, color: "#64748b", marginLeft: 8 }}>({b.beds.ward})</span>}
+              </p>
+              <p style={{ fontSize: 12, color: "#64748b", margin: "0 0 4px" }}>Type: {b.beds?.bed_type || "General"}</p>
+              <p style={{ fontSize: 11, color: "#cbd5e1", margin: "4px 0 0" }}>Booked: {new Date(b.booked_at || Date.now()).toLocaleString("en-IN")}</p>
+            </div>
+          </div>
+        </Card>
+      ))}
     </div>
   );
 
