@@ -68,16 +68,16 @@ export async function ensureHospitalInDB(osmHospital) {
 
     const est = estimatedBeds(osmHospital.name);
 
-    // 1. Look for an existing hospital with same name (case-insensitive)
+    // 1. Look for an existing hospital with same name (fuzzy match)
     const { data: byName } = await supabase
         .from("hospitals")
         .select("id")
-        .ilike("name", osmHospital.name.trim())
+        .ilike("name", `%${osmHospital.name.replace(/hospital|clinic|care|centre/gi, "").trim()}%`)
         .maybeSingle();
 
     if (byName?.id) return byName.id;
 
-    // 2. Look for one within 150m (same building, different name capitalisation)
+    // 2. Look for one within 300m (same building/block, different name capitalisation)
     if (osmHospital.latitude) {
         const { data: all } = await supabase
             .from("hospitals")
@@ -86,7 +86,7 @@ export async function ensureHospitalInDB(osmHospital) {
 
         const nearby = (all || []).find(h =>
             haversine({ lat: h.latitude, lng: h.longitude },
-                { lat: osmHospital.latitude, lng: osmHospital.longitude }) < 0.15
+                { lat: osmHospital.latitude, lng: osmHospital.longitude }) < 0.30
         );
         if (nearby) return nearby.id;
     }
@@ -175,8 +175,9 @@ export function useNearbyHospitals(coords) {
                 // Merge OSM + DB
                 const merged = osm.map(o => {
                     const key = o.name.toLowerCase().trim();
+                    // Match by name OR within 300m (0.3km) radius
                     const db = dbByNameLow[key] || (dbH || []).find(d =>
-                        d.latitude && haversine({ lat: d.latitude, lng: d.longitude }, { lat: o.latitude, lng: o.longitude }) < 0.15
+                        d.latitude && haversine({ lat: d.latitude, lng: d.longitude }, { lat: o.latitude, lng: o.longitude }) < 0.30
                     );
                     const est = estimatedBeds(o.name);
                     return {

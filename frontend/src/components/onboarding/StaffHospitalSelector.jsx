@@ -7,6 +7,7 @@ import React, { useState, useEffect } from "react";
 import { supabase } from "../../supabaseClient";
 import { useAuth } from "../../hooks/useAuth";
 import { haversine } from "../../hooks/useGeolocation";
+import { ensureHospitalInDB } from "../../hooks/useNearbyHospitals";
 
 const OVERPASS = "https://overpass-api.de/api/interpreter";
 
@@ -60,7 +61,7 @@ export default function StaffHospitalSelector({ userId, onLinked }) {
 
                 // Merge: DB hospitals first (in MedQueue), then OSM-only nearby
                 const dbByName = Object.fromEntries((dbH || []).map(h => [h.name?.toLowerCase().trim(), h]));
-                const dbIds = new Set((dbH || []).map(h => h.id));
+                const cleanName = (n) => (n || "").toLowerCase().replace(/hospital|clinic|care|centre/gi, "").trim();
 
                 const mergedList = (dbH || [])
                     .map(db => ({
@@ -75,7 +76,14 @@ export default function StaffHospitalSelector({ userId, onLinked }) {
                     }))
                     .concat(
                         osmH
-                            .filter(o => !dbByName[o.name?.toLowerCase().trim()])
+                            .filter(o => {
+                                // 1. Check exact/fuzzy name match
+                                const fuzzyMatch = (dbH || []).find(db => cleanName(db.name).includes(cleanName(o.name)) || cleanName(o.name).includes(cleanName(db.name)));
+                                // 2. Check radius (under 300m = same hospital)
+                                const nearbyMatch = (dbH || []).find(db => db.latitude && haversine({ lat: db.latitude, lng: db.longitude }, { lat: o.latitude, lng: o.longitude }) < 0.30);
+
+                                return !fuzzyMatch && !nearbyMatch;
+                            })
                             .map(o => ({
                                 id: `osm_${o.osm_id}`,
                                 db_id: null,
@@ -105,29 +113,21 @@ export default function StaffHospitalSelector({ userId, onLinked }) {
         try {
             let hospId = selected.db_id;
 
-            // If OSM-only hospital, register it first
+            // If OSM-only hospital, register it using the shared exact logic
             if (!hospId) {
-                const { data: ins, error: insErr } = await supabase
-                    .from("hospitals")
-                    .insert({
-                        name: selected.name,
-                        address: selected.address || "",
-                        city: selected.address?.split(",").pop()?.trim() || "India",
-                        latitude: selected.latitude,
-                        longitude: selected.longitude,
-                        location: `POINT(${selected.longitude} ${selected.latitude})`,
-                        total_beds: 0,
-                        available_beds: 0,
-                        is_active: true,
-                    })
-                    .select("id")
-                    .single();
-                if (insErr) throw new Error(insErr.message);
-                hospId = ins.id;
+                hospId = await ensureHospitalInDB(selected);
             }
 
-            // Link via SECURITY DEFINER RPC (bypasses RLS infinite recursion)
-            const { error: updErr } = await supabase.rpc("link_staff_hospital", { p_hospital_id: hospId });
+            // Direct update of the user's row. We forcefully sync the true role from auth metadata
+            // to automatically fix the database if the signup trigger gave them the 'patient' role by mistake.
+            const { data: { user: au } } = await supabase.auth.getUser();
+            const realRole = au?.user_metadata?.user_role || "hospital_staff";
+
+            const { error: updErr } = await supabase.from("users").update({
+                hospital_id: hospId,
+                role: realRole
+            }).eq("id", userId);
+
             if (updErr) throw new Error(updErr.message);
 
             // Refresh user context so hospital_id is set immediately

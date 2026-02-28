@@ -300,27 +300,34 @@ export default function PatientDashboard({ section }) {
   // ─ All state at top level (React hooks rule: never inside conditionals) ─
   const [profile, setProfile] = useState(null);
   const [ambulances, setAmbulances] = useState([]);
+  const [activeDispatch, setActiveDispatch] = useState(null);
+  const [activeAmbulance, setActiveAmbulance] = useState(null);
+  const [routeLine, setRouteLine] = useState(null);
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [bookModal, setBookModal] = useState(null);
   const [showSOS, setShowSOS] = useState(false);
   const [toast, setToast] = useState("");
-  const [editProfile, setEditProfile] = useState(false);  // ← moved here from inside conditional
+  const [editProfile, setEditProfile] = useState(false);
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(""), 6000); };
 
   const load = async () => {
     if (!user) return;
     setLoading(true);
-    const [p, a, bk] = await Promise.all([
+    const [p, a, bk, dsp] = await Promise.all([
       supabase.from("patient_profiles").select("*").eq("user_id", user.id).maybeSingle(),
       supabase.from("ambulances").select("*").eq("status", "available"),
       supabase.from("bookings").select("*, hospitals(name), beds(bed_number,bed_type,ward)")
         .eq("patient_id", user.id).order("booked_at", { ascending: false }).limit(20),
+      supabase.from("dispatches").select("*, ambulances(*)").eq("patient_id", user.id).in("status", ["pending", "accepted", "en_route"]).maybeSingle(),
     ]);
+
     setProfile(p.data);
     setAmbulances(a.data || []);
     setBookings(bk.data || []);
+    setActiveDispatch(dsp.data || null);
+    setActiveAmbulance(dsp.data?.ambulances || null);
     setLoading(false);
   };
 
@@ -332,6 +339,30 @@ export default function PatientDashboard({ section }) {
       load();
     }
   });
+
+  useRealtime("dispatches", { filter: `patient_id=eq.${user?.id}` }, () => {
+    showToast("🚑 Ambulance dispatch updated!");
+    load();
+  });
+
+  useRealtime("ambulances", { filter: activeAmbulance ? `id=eq.${activeAmbulance.id}` : undefined, event: "UPDATE" }, (payload) => {
+    setActiveAmbulance(payload.new);
+  });
+
+  useEffect(() => {
+    if (!activeAmbulance?.latitude || !activeAmbulance?.longitude || !coords?.lat || !coords?.lng) {
+      setRouteLine(null);
+      return;
+    }
+    fetch(`https://router.project-osrm.org/route/v1/driving/${activeAmbulance.longitude},${activeAmbulance.latitude};${coords.lng},${coords.lat}?overview=full&geometries=geojson`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.routes?.[0]?.geometry?.coordinates) {
+          // GeoJSON is [lng, lat], Leaflet is [lat, lng]
+          setRouteLine(data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]));
+        }
+      }).catch(err => console.error("OSRM route error:", err));
+  }, [activeAmbulance?.latitude, activeAmbulance?.longitude, coords?.lat, coords?.lng]);
 
   const firstName = user?.full_name?.split(" ")[0] || "there";
   const totalFree = nearbyHosp.reduce((s, h) => s + (h.available_beds || 0), 0);
@@ -366,12 +397,33 @@ export default function PatientDashboard({ section }) {
       {/* Location Picker — set demo location or override GPS */}
       <LocationPicker coords={coords} onOverride={setOverride} />
 
+      {/* Active Ambulance Banner */}
+      {activeDispatch && activeAmbulance && (
+        <Card style={{ borderColor: "#3b82f6", background: "#eff6ff", padding: "16px 20px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div>
+              <p style={{ fontSize: 13, fontWeight: 900, color: "#1e3a8a", margin: "0 0 4px", textTransform: "uppercase", letterSpacing: 1 }}>🚑 Ambulance Assigned</p>
+              <p style={{ fontSize: 13, color: "#2563eb", margin: "0 0 4px", fontWeight: 700 }}>Vehicle: {activeAmbulance.vehicle_number}</p>
+              <p style={{ fontSize: 12, color: "#64748b", margin: 0 }}>Driver is heading to your location. Watch map for live updates.</p>
+            </div>
+            <div style={{ fontSize: 32, animation: "pulse 2s infinite" }}>🚨</div>
+          </div>
+        </Card>
+      )}
+
       {/* Map */}
       <div>
         <SectionTitle>🗺️ Hospitals &amp; Ambulances Near You</SectionTitle>
         <div style={{ isolation: "isolate", borderRadius: 16, overflow: "hidden" }}>
           <Suspense fallback={<div style={{ height: 280, background: "#f8fafc", borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center", color: "#94a3b8" }}>🗺️ Loading map…</div>}>
-            <MapView myPosition={coords} hospitals={nearbyHosp} ambulances={ambulances} height="280px" onHospitalClick={h => h.available_beds > 0 && setBookModal(h)} />
+            <MapView
+              myPosition={coords}
+              hospitals={nearbyHosp}
+              ambulances={activeAmbulance ? [activeAmbulance] : ambulances}
+              routeLine={routeLine}
+              height="280px"
+              onHospitalClick={h => h.available_beds > 0 && setBookModal(h)}
+            />
           </Suspense>
         </div>
       </div>
