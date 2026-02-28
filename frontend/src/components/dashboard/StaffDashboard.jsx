@@ -44,12 +44,21 @@ export default function StaffDashboard({ section }) {
       supabase.from("hospitals").select("*").eq("id", linkedHospitalId).maybeSingle(),
       supabase.from("beds").select("*").eq("hospital_id", linkedHospitalId).order("bed_number"),
       supabase.from("bookings")
-        .select("*, beds(bed_number,bed_type,ward), patient_profiles(blood_group,allergies)")
+        // We do NOT use !inner here, this is strictly a LEFT JOIN. 
+        // If patient_profiles or beds is null/blocked by RLS, the booking itself STILL loads
+        .select(`
+          *,
+          beds ( bed_number, bed_type, ward ),
+          patient_profiles ( blood_group, allergies )
+        `)
         .eq("hospital_id", linkedHospitalId)
         .in("status", ["pending", "confirmed"])
         .order("booked_at", { ascending: false }),
       supabase.from("bookings")
-        .select("*, beds(bed_number,bed_type,ward)")
+        .select(`
+          *,
+          beds ( bed_number, bed_type, ward )
+        `)
         .eq("hospital_id", linkedHospitalId)
         .eq("status", "admitted")
         .order("admitted_at", { ascending: false }),
