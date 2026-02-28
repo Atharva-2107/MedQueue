@@ -1,36 +1,82 @@
 // src/hooks/useGeolocation.js
-// Watches the browser's GPS and returns live position.
-// Falls back to Pune city center (18.5204, 73.8567) if denied.
+// Watches browser GPS and returns live position.
+// If no hardware GPS (desktop/laptop), falls back to Lonavala by default.
+// Manual override: user can type a city name → Nominatim geocodes it → stored in sessionStorage.
 import { useState, useEffect, useRef } from "react";
 
-const PUNE_DEFAULT = { lat: 18.5204, lng: 73.8567 };
+// ── Change this to match your demo location ───────────────────
+// Lonavala, Maharashtra: 18.7481° N, 73.4072° E
+const DEMO_DEFAULT = { lat: 18.7481, lng: 73.4072 };
 
+// ── Try to restore a user-set override from sessionStorage ───
+function getSavedOverride() {
+    try {
+        const s = sessionStorage.getItem("mq_location_override");
+        return s ? JSON.parse(s) : null;
+    } catch { return null; }
+}
+function saveOverride(coords) {
+    try { sessionStorage.setItem("mq_location_override", JSON.stringify(coords)); } catch { }
+}
+export function clearLocationOverride() {
+    try { sessionStorage.removeItem("mq_location_override"); } catch { }
+}
+
+// ── Geocode a text address / city via Nominatim (OSM, free) ──
+export async function geocodeCity(query) {
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query + ", India")}&format=json&limit=3&countrycodes=in`;
+    const res = await fetch(url, { headers: { "Accept-Language": "en" } });
+    const data = await res.json();
+    if (!data?.length) throw new Error("Location not found. Try a more specific name.");
+    return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon), label: data[0].display_name };
+}
+
+// ── Main hook ─────────────────────────────────────────────────
 export function useGeolocation({ watch = true } = {}) {
-    const [coords, setCoords] = useState(null);     // { lat, lng, accuracy }
+    const saved = getSavedOverride();
+    // Start with any previously saved override, else null (triggers GPS attempt)
+    const [coords, setCoords] = useState(saved || null);
     const [error, setError] = useState(null);
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(!saved);
     const watchId = useRef(null);
 
+    // Allow external code to push a new override (from LocationPicker)
+    const setOverride = (newCoords) => {
+        saveOverride(newCoords);
+        setCoords(newCoords);
+        setLoading(false);
+        setError(null);
+    };
+
     useEffect(() => {
+        // If we already have an override, skip the GPS request
+        if (getSavedOverride()) return;
+
         if (!navigator.geolocation) {
-            setCoords(PUNE_DEFAULT);
-            setError("Geolocation not supported");
+            setCoords(DEMO_DEFAULT);
+            setError("No GPS hardware — using Lonavala");
             setLoading(false);
             return;
         }
 
         const success = (pos) => {
-            setCoords({
-                lat: pos.coords.latitude,
-                lng: pos.coords.longitude,
-                accuracy: pos.coords.accuracy,
-            });
+            // Only use browser GPS if accuracy < 5000m (if accuracy is huge it's IP-based)
+            const acc = pos.coords.accuracy;
+            if (acc < 5000) {
+                const c = { lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: acc };
+                setCoords(c);
+            } else {
+                // IP-based location, accuracy too low → use demo default
+                console.warn(`[GPS] accuracy ${acc}m too low — using Lonavala demo default`);
+                setCoords(DEMO_DEFAULT);
+                setError("IP-based location inaccurate — showing Lonavala. Use 'Set Location' to fix.");
+            }
             setLoading(false);
         };
 
         const fail = (err) => {
-            console.warn("[GPS]", err.message);
-            setCoords(PUNE_DEFAULT);   // fall back gracefully
+            console.warn("[GPS] denied:", err.message);
+            setCoords(DEMO_DEFAULT);        // Default to Lonavala for demo
             setError(err.message);
             setLoading(false);
         };
@@ -48,7 +94,7 @@ export function useGeolocation({ watch = true } = {}) {
         };
     }, [watch]);
 
-    return { coords, error, loading };
+    return { coords, error, loading, setOverride };
 }
 
 /* Haversine distance in km between two {lat,lng} pairs */

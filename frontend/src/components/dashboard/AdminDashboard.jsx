@@ -1,20 +1,35 @@
-// src/components/dashboard/AdminDashboard.jsx — Light mode, Supabase-direct
+// src/components/dashboard/AdminDashboard.jsx — Hospital Admin: linked via GPS, sees all data
 import React, { useState, useEffect } from "react";
+import { useAuth } from "../../hooks/useAuth";
 import { supabase } from "../../supabaseClient";
+import { useRealtime } from "../../hooks/useRealtime";
+import StaffHospitalSelector from "../onboarding/StaffHospitalSelector";
 import {
   StatCard, SectionTitle, EmptyState, LoadingSpinner,
   Card, BedBar, ProgressRing, DashboardHeader, StatusBadge, InfoRow,
 } from "../shared/UIComponents";
 
 export default function AdminDashboard({ section }) {
+  const { user } = useAuth();
+
+  // PERSISTENCE FIX: user?.hospital_id (from DB) is authoritative across logins
+  // localHospId is only used within-session right after first selection
+  const [localHospId, setLocalHospId] = useState(null);
+  const linkedHospitalId = user?.hospital_id || localHospId;
   const [hospitals, setHospitals] = useState([]);
   const [ambulances, setAmbulances] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [dispatches, setDispatches] = useState([]);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [toast, setToast] = useState("");
+
+  const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(""), 5000); };
+
+  // ── early return placed AFTER hooks (React rules) — see below
 
   useEffect(() => {
+    if (!linkedHospitalId) return; // wait until hospital selected
     const load = async () => {
       setLoading(true);
       const [h, a, b, d, u] = await Promise.all([
@@ -24,7 +39,22 @@ export default function AdminDashboard({ section }) {
         supabase.from("dispatches").select("*, ambulances(vehicle_number), hospitals(name)").order("requested_at", { ascending: false }).limit(20),
         supabase.from("users").select("id, full_name, role, is_active").order("created_at", { ascending: false }),
       ]);
-      setHospitals(h.data || []);
+
+      // Deduplicate hospitals by name+address (remove static seed data duplicates)
+      const seen = new Set();
+      const dedupedHospitals = (h.data || []).filter(hosp => {
+        const key = `${hosp.name?.toLowerCase().trim()}|${(hosp.address || "").toLowerCase().trim()}`;
+        if (seen.has(key)) return false;
+        seen.add(key); return true;
+      });
+      // Sort: linked hospital first, then alphabetically
+      dedupedHospitals.sort((a, b) => {
+        if (a.id === linkedHospitalId) return -1;
+        if (b.id === linkedHospitalId) return 1;
+        return (a.name || "").localeCompare(b.name || "");
+      });
+
+      setHospitals(dedupedHospitals);
       setAmbulances(a.data || []);
       setBookings(b.data || []);
       setDispatches(d.data || []);
@@ -32,7 +62,16 @@ export default function AdminDashboard({ section }) {
       setLoading(false);
     };
     load();
-  }, []);
+  }, [linkedHospitalId]);
+
+  // Real-time: new bookings + dispatches
+  useRealtime("bookings", { event: "INSERT" }, () => showToast("🆕 New booking!"));
+  useRealtime("dispatches", { event: "INSERT" }, () => showToast("🆘 New SOS dispatch!"));
+
+  // ── Now safe to do conditional return — all hooks already called above ──
+  if (user && !linkedHospitalId) {
+    return <StaffHospitalSelector userId={user.id} onLinked={(id) => setLocalHospId(id)} />;
+  }
 
   if (loading) return <LoadingSpinner />;
 
