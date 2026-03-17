@@ -36,25 +36,28 @@ serve(async (req) => {
 
     console.log("Webhook Triggered:", payload.table, payload.type)
 
+    // Determine who to send the SMS to. Modify this to use your own phone number for testing,
+    // or use `record.phone` if available.
+    const TEST_PHONE_NUMBER = "+917387654912" // Replace with your actual number for Twilio trial
+
     if (payload.table === 'bookings') {
       const { type, record, old_record } = payload
 
       // Patient Books Bed (INSERT)
       if (type === 'INSERT') {
         const msg = `MedQueue: Your booking request is received. We are awaiting hospital confirmation.`
-        // Assume you fetch user's phone in a real scenario by querying the DB
-        await sendSms("+917387654912", msg) // Replace with DB lookup
+        await sendSms(TEST_PHONE_NUMBER, msg)
       }
 
       // Hospital Updates Booking (UPDATE)
       if (type === 'UPDATE' && old_record.status !== record.status) {
         if (record.status === 'confirmed') {
           const msg = `MedQueue: YAY! Your bed booking is CONFIRMED. Please head to the hospital.`
-          await sendSms("+917387654912", msg)
+          await sendSms(TEST_PHONE_NUMBER, msg)
         }
         if (record.status === 'admitted') {
           const msg = `MedQueue: You have been successfully admitted to the hospital.`
-          await sendSms("+917387654912", msg)
+          await sendSms(TEST_PHONE_NUMBER, msg)
         }
       }
     }
@@ -66,19 +69,32 @@ serve(async (req) => {
       if (type === 'INSERT' && !record.ambulance_id) {
         const msg = `🚨 EMERGENCY (MedQueue): A patient requested an SOS near your area.`
         // Broadcast SMS to nearest driver (simplified for example)
-        await sendSms("+917387654912", msg)
+        await sendSms(TEST_PHONE_NUMBER, msg)
       }
 
       // Ambulance accepts dispatch (UPDATE)
       if (type === 'UPDATE' && old_record.status !== record.status) {
         if (record.status === 'accepted') {
           const msg = `🚑 MedQueue: An ambulance is on the way to your location!`
-          await sendSms("+917387654912", msg)
+          await sendSms(TEST_PHONE_NUMBER, msg)
         }
         if (record.status === 'arrived') {
           const msg = `🚑 MedQueue: Your ambulance has arrived!`
-          await sendSms("+917387654912", msg)
+          await sendSms(TEST_PHONE_NUMBER, msg)
         }
+      }
+    }
+
+    // Landing Page SOS (Emergency Requests)
+    if (payload.table === 'emergency_requests') {
+      const { type, record } = payload
+      if (type === 'INSERT') {
+        const msg = `🚨 URGENT MedQueue SOS from Landing Page! Contact: ${record.phone}, Type: ${record.type}. Location: ${record.lat}, ${record.lng}.`
+        // We can send to the test number, or directly to the patient's phone if they used a Twilio verified number
+        await sendSms(TEST_PHONE_NUMBER, msg)
+
+        // If you want to reply to the user who requested help directly:
+        // await sendSms(record.phone, `MedQueue: Your SOS request has been received. Help is on the way.`)
       }
     }
 
