@@ -7,7 +7,9 @@
 //   Express REST API  →  Supabase (Postgres + Realtime)
 //   Socket.IO         →  Live GPS / Bed updates to React frontend
 // ─────────────────────────────────────────────────────────────────
-require("dotenv").config();
+if (process.env.NODE_ENV !== "production") {
+  require("dotenv").config();
+}
 
 const express = require("express");
 const http = require("http");

@@ -19,7 +19,7 @@ const SUPABASE_URL  = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 if (!SUPABASE_URL || !SUPABASE_ANON) {
-  console.error("❌ Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY in .env");
+  console.error("❌ Missing Supabase URL or Key. Check .env if local, or Environment Variables in your hosting platform.");
 }
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON);
